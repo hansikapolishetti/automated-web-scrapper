@@ -1,8 +1,12 @@
 # Backend
 
-This folder will contain the backend logic for:
-- Web scraping
-- Data processing
-- API endpoints
+Node.js + Express backend.
 
-Technology stack will be finalized later.
+## Current Status
+- Basic server setup
+- Health check route (/)
+
+## Planned Features
+- Web scraping services
+- Price comparison logic
+- REST APIs
