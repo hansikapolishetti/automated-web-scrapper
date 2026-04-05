@@ -16,3 +16,7 @@ Thumbs.db
 
 # Environment files
 .env
+
+# Python
+__pycache__/
+*.py[cod]
