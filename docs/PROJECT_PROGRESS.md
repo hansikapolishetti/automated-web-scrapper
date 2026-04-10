@@ -95,6 +95,34 @@ Outcome:
 Suggested commit theme:
 - `Add hierarchical laptop comparison and value matching`
 
+## Stage 5: PriceScout Frontend and Product UI
+
+Goal:
+- introduce the first real frontend for the project and present comparison results in a user-facing way
+
+Main work:
+- introduced the `PriceScout` product name
+- built the first React frontend experience for the project
+- added:
+  - landing homepage
+  - search-first hero section
+  - category cards
+  - laptop comparison workspace
+  - comparison tabs for exact, variant, similar-spec, and best-deal views
+- added light and dark theme support
+- improved homepage/search behavior so:
+  - no results load by default on empty input
+  - short weak text queries are ignored
+  - pasted Amazon/Flipkart product links can be used as search input
+- hid noisy unknown values from the product UI to keep cards cleaner
+
+Outcome:
+- the project now has its first branded frontend experience
+- comparison data can be explored visually instead of only through raw API output
+
+Suggested commit theme:
+- `Build PriceScout frontend and introduce project branding`
+
 ## Current Backend Note
 
 Current active testing backend:
