@@ -45,7 +45,11 @@ def is_known(value):
 
 
 def normalize_value(value):
-    return normalize_text(value).lower() if value else ""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return normalize_text(value).lower()
+    return str(value).strip().lower()
 
 
 def comparable_name(name):
@@ -242,7 +246,19 @@ def compare_field(left, right, field):
 
 
 def build_differences(left, right):
-    fields = ["model_code", "screen_size", "gpu", "price", "processor", "ram", "storage"]
+    fields = [
+        "model_code",
+        "screen_size",
+        "gpu",
+        "price",
+        "original_price",
+        "discount_percent",
+        "rating",
+        "review_count",
+        "processor",
+        "ram",
+        "storage",
+    ]
     differences = {}
     for field in fields:
         result = compare_field(left, right, field)
@@ -472,9 +488,16 @@ def comparison_payload(query=None, limit=20):
                 "_id": 0,
                 "name": 1,
                 "price": 1,
+                "original_price": 1,
+                "discount_amount": 1,
+                "discount_percent": 1,
+                "rating": 1,
+                "review_count": 1,
                 "link": 1,
                 "image": 1,
                 "website": 1,
+                "category": 1,
+                "currency": 1,
                 "brand": 1,
                 "ram": 1,
                 "storage": 1,
@@ -482,6 +505,7 @@ def comparison_payload(query=None, limit=20):
                 "screen_size": 1,
                 "gpu": 1,
                 "model_code": 1,
+                "last_seen_at": 1,
             },
         )
     )
