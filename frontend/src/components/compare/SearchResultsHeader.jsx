@@ -8,7 +8,7 @@ export default function SearchResultsHeader({ query }) {
   const handleSearch = (e) => {
     e.preventDefault();
     if (localQuery.trim().length > 0) {
-      navigate('/compare?q=' + encodeURIComponent(localQuery.trim()));
+      navigate('/search?q=' + encodeURIComponent(localQuery.trim()));
     }
   };
 

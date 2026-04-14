@@ -8,7 +8,7 @@ export default function SearchBar() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (query.trim().length > 0) {
-      navigate('/compare?q=' + encodeURIComponent(query.trim()));
+      navigate('/search?q=' + encodeURIComponent(query.trim()));
     }
   };
 

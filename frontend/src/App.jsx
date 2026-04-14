@@ -5,6 +5,10 @@ import HeroSection from './components/HeroSection';
 import CategoryGrid from './components/CategoryGrid';
 import LoginPage from './pages/LoginPage';
 import ComparePage from './pages/ComparePage';
+import CategoriesPage from './pages/CategoriesPage';
+import CategoryProductsPage from './pages/CategoryProductsPage';
+import SearchResultsPage from './pages/SearchResultsPage';
+import ProductPage from './pages/ProductPage';
 
 function Home() {
   return (
@@ -35,6 +39,10 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/compare" element={<ComparePage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/category/:categoryName" element={<CategoryProductsPage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
+        <Route path="/product/:productId" element={<ProductPage />} />
       </Routes>
     </div>
   );

@@ -1,45 +1,50 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function CategoryCard({ title, priceRange, icon }) {
+export default function CategoryCard({ categoryId, title, description, icon, image, gradient }) {
   const navigate = useNavigate();
 
   return (
     <div 
-      onClick={() => navigate('/compare?q=' + encodeURIComponent(title))}
-      className="group relative p-8 rounded-[2.5rem] transition-all duration-300 cursor-pointer overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/50 bg-white hover:-translate-y-2 hover:shadow-[0_25px_60px_rgba(59,130,246,0.3)] hover:border-indigo-500"
+      onClick={() => navigate(`/category/${categoryId || encodeURIComponent(title.toLowerCase())}`)}
+      className={`group flex flex-col rounded-[1.5rem] p-4 sm:p-5 border border-white/50 shadow-sm hover:shadow-lg hover:-translate-y-1.5 transition-all duration-300 cursor-pointer relative overflow-hidden bg-gradient-to-br ${gradient} backdrop-blur-md`}
     >
-      {/* Background Gradient overlay on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-0"></div>
-      
-      {/* Decorative large bg icon */}
-      <div className="absolute top-0 right-0 p-6 opacity-[0.04] group-hover:opacity-10 group-hover:invert transform translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-all duration-500 pointer-events-none z-0">
-        <span className="text-9xl">{icon}</span>
-      </div>
-      
-      {/* Card Content Layer */}
-      <div className="flex flex-col h-full relative z-10">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-inner transition-all duration-300 bg-slate-50 group-hover:scale-110 group-hover:bg-white/20 group-hover:text-white">
+      {/* Product Image - top area */}
+      <div className="relative w-full h-32 sm:h-36 mb-4 rounded-xl overflow-hidden shadow-inner bg-white/40">
+        <img 
+          src={image} 
+          alt={title} 
+          className="w-full h-full object-cover transform scale-100 group-hover:scale-110 transition-transform duration-500 ease-in-out"
+        />
+        {/* Overlay gradient to fade bottom */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        {/* Floating icon */}
+        <div className="absolute top-3 right-3 w-10 h-10 bg-white/90 backdrop-blur-md rounded-xl flex items-center justify-center text-xl shadow-sm border border-white/50 transform group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
           {icon}
         </div>
-        
-        <h3 className="text-2xl font-extrabold tracking-tight mb-2 text-slate-900 transition-colors duration-300 group-hover:text-white">
+      </div>
+      
+      {/* Title & Badge */}
+      <div className="flex flex-col mb-1 z-10">
+        <h3 className="text-lg font-bold tracking-tight text-slate-800 group-hover:text-slate-950 transition-colors mb-2">
           {title}
         </h3>
         
-        <div className="self-start inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-8 transition-colors duration-300 bg-slate-100 text-slate-600 group-hover:bg-white/20 group-hover:text-blue-50">
-          {priceRange}
-        </div>
-        
-        <div className="mt-auto pt-4 flex items-center gap-1 group-hover:gap-3 transition-all duration-300">
-          <span className="font-bold text-sm text-blue-600 transition-colors duration-300 group-hover:text-white">
-            Explore Category
+        {/* Product Count Badge */}
+        <div className="self-start">
+          <span className="inline-block px-2.5 py-1 bg-white/70 backdrop-blur-md shadow-sm border border-white/60 rounded-full text-[10px] sm:text-[11px] font-bold text-slate-700 group-hover:bg-white group-hover:text-indigo-600 transition-all duration-300">
+            {description} Products
           </span>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 bg-blue-50 text-blue-600 group-hover:bg-white group-hover:text-indigo-600">
-            <svg className="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </div>
+        </div>
+      </div>
+      
+      {/* Explore Arrow Line */}
+      <div className="flex items-center gap-2 text-slate-700 text-xs sm:text-sm font-bold mt-3 pt-3 border-t border-slate-300/30 z-10 flex-grow-0">
+        <span className="group-hover:text-indigo-700 transition-colors">Explore</span>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm ml-auto group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+          <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
         </div>
       </div>
     </div>
