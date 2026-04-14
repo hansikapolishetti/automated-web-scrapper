@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import ProductGallery from '../components/ProductGallery';
 import ProductDetails from '../components/ProductDetails';
@@ -9,7 +9,6 @@ import { mockProductDetail } from '../data/productMockData';
 
 export default function ProductPage() {
   const { productId } = useParams();
-  const navigate = useNavigate();
   const product = mockProductDetail;
 
   useEffect(() => {
@@ -17,33 +16,36 @@ export default function ProductPage() {
   }, [productId]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <Navbar />
-      
-      <main className="flex-grow py-8">
-        <div className="max-w-7xl mx-auto px-6">
-          
-          <button onClick={() => navigate(-1)} className="mb-6 flex items-center text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-            Back to results
-          </button>
+    <div className="min-h-screen flex flex-col font-sans bg-slate-50">
+      <Navbar forceDarkText />
 
-          {/* Master Layout Container: Bulletproof Flexbox Split */}
-          <div className="flex flex-col lg:flex-row gap-10 items-start">
-            
-            {/* LEFT COLUMN: Single Unified Product Card (7/12 Width) */}
-            <div className="w-full lg:w-7/12">
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8 space-y-6">
-                <ProductGallery images={product.images} title={product.title} />
+      <main className="flex-grow pt-24 pb-12">
+        <div className="max-w-7xl mx-auto px-6">
+
+
+          {/* Two-column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+
+            {/* ── LEFT: Product Info ── */}
+            <div className="flex flex-col gap-8">
+
+              {/* Gallery — keep its own visual treatment */}
+              <ProductGallery images={product.images} title={product.title} />
+
+              {/* Details */}
+              <div className="border-t border-slate-200 pt-6">
                 <ProductDetails product={product} />
-                <div className="border-t border-slate-100 pt-4">
-                  <StorePriceList stores={product.stores} />
-                </div>
               </div>
+
+              {/* Store Prices */}
+              <div className="border-t border-slate-200 pt-2">
+                <StorePriceList stores={product.stores} />
+              </div>
+
             </div>
 
-            {/* RIGHT COLUMN: Comparison Workspace Tabs (5/12 Width + Sticky) */}
-            <div className="w-full lg:w-5/12 flex flex-col gap-10 lg:sticky lg:top-8">
+            {/* ── RIGHT: Comparison — sticky ── */}
+            <div className="lg:sticky lg:top-8" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
               <ComparisonWorkspace product={product} />
             </div>
 
