@@ -8,15 +8,15 @@ const CATEGORIES = [
     description: "1,200+", 
     icon: "💻",
     image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-blue-50/80 to-indigo-50/80"
+    gradient: "from-blue-50 to-indigo-50"
   },
   { 
     id: "mobiles", 
     title: "Smartphones", 
     description: "3,500+", 
     icon: "📱",
-    image: "https://images.unsplash.com/photo-1598327105666-5b89351cb31b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-purple-50/80 to-fuchsia-50/80"
+    image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+    gradient: "from-purple-50 to-fuchsia-50"
   },
   { 
     id: "tvs", 
@@ -24,7 +24,7 @@ const CATEGORIES = [
     description: "800+", 
     icon: "📺",
     image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-rose-50/80 to-orange-50/80"
+    gradient: "from-rose-50 to-orange-50"
   },
   { 
     id: "refrigerators", 
@@ -32,7 +32,7 @@ const CATEGORIES = [
     description: "450+", 
     icon: "🧊",
     image: "https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-cyan-50/80 to-teal-50/80"
+    gradient: "from-cyan-50 to-teal-50"
   },
   { 
     id: "washers", 
@@ -40,15 +40,15 @@ const CATEGORIES = [
     description: "300+", 
     icon: "🧺",
     image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-amber-50/80 to-yellow-50/80"
+    gradient: "from-yellow-50 to-amber-50"
   },
   { 
     id: "ac", 
     title: "Air Conditioners", 
     description: "250+", 
     icon: "❄️",
-    image: "https://images.unsplash.com/photo-1615529182904-14819c35db37?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    gradient: "from-emerald-50/80 to-green-50/80"
+    image: "/images/categories/air-conditioner.jpg",
+    gradient: "from-green-50 to-emerald-50"
   },
 ];
 

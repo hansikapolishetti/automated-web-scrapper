@@ -12,10 +12,14 @@ export default function Navbar({ forceDarkText = false }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const bgClass = isScrolled ? 'bg-white/90 backdrop-blur-lg shadow-[0_4px_30px_rgba(0,0,0,0.05)] border-b border-white/20 py-3' : 'bg-transparent py-5';
-  const textClass = (isScrolled || forceDarkText) ? 'text-slate-900' : 'text-white';
-  const buttonClass = (isScrolled || forceDarkText) ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-white hover:bg-slate-50 text-blue-700';
-  const linkHoverClass = forceDarkText ? 'hover:text-blue-600 text-slate-700' : (isScrolled ? 'hover:text-blue-600 text-slate-700' : 'hover:text-cyan-400 text-white/90');
+  const bgClass = forceDarkText
+    ? 'bg-white border-b border-gray-200 py-3'
+    : isScrolled
+      ? 'bg-white/95 backdrop-blur-lg shadow-[0_4px_30px_rgba(0,0,0,0.06)] border-b border-gray-200 py-3'
+      : 'bg-transparent py-5';
+
+  const textClass      = (isScrolled || forceDarkText) ? 'text-slate-900' : 'text-white';
+  const linkHoverClass = (isScrolled || forceDarkText) ? 'text-gray-700 font-semibold hover:text-indigo-600 transition-colors' : 'text-white/90 font-bold hover:text-cyan-400 transition-colors drop-shadow-sm';
   
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${bgClass}`}>
@@ -32,12 +36,16 @@ export default function Navbar({ forceDarkText = false }) {
             <a href="#" className={`font-bold transition-colors drop-shadow-sm ${linkHoverClass}`}>Compare</a>
           </div>
           
-          <div className="flex items-center gap-4">
-            <Link to="/login" className={`hidden sm:block font-bold transition-colors px-2 ${(isScrolled || forceDarkText) ? 'text-slate-700 hover:text-blue-600' : 'text-white hover:text-cyan-400'}`}>
+          <div className="flex items-center gap-6">
+            <Link
+              to="/login"
+              className={`font-semibold transition-colors ${
+                (isScrolled || forceDarkText)
+                  ? 'text-gray-700 hover:text-indigo-600'
+                  : 'text-white/90 hover:text-cyan-400'
+              }`}
+            >
               Login
-            </Link>
-            <Link to="/login" className={`hidden sm:block ${buttonClass} px-6 py-2.5 rounded-full font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95`}>
-              Get Started
             </Link>
             <button className={`md:hidden focus:outline-none p-2 hover:opacity-80 transition-opacity ${(isScrolled || forceDarkText) ? 'text-slate-700' : 'text-white'}`} aria-label="Open menu">
               <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
