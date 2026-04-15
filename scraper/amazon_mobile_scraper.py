@@ -6,11 +6,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
 from playwright.async_api import async_playwright
-# from database.db import collection
+from database.db import get_collection
+from utils.mobile_feature_extractor import extract_mobile_features
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
 UNKNOWN_IMAGE = "Unavailable"
+collection = get_collection("mobiles")
 
 SEARCH_QUERIES = [
     "smartphones",
@@ -391,26 +393,24 @@ async def scrape_amazon_mobile():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "amazon",
-                            "category": "mobile",
+                            "category": "mobiles",
                             "source_text": feature_text or UNKNOWN_TEXT,
                             "search_query": search_query,
                         }
 
-                        product_data.update(extract_mobile_specs(product_data["source_text"]))
+                        product_data.update(extract_mobile_features(product_data["source_text"]))
                         product_data["unknown_field_count"] = count_unknown_fields(product_data)
                         total_unknown_fields += product_data["unknown_field_count"]
                         total_products += 1
 
-                        # Database part disabled
-                        # collection.update_one(
-                        #     {
-                        #         "name": product_data["name"],
-                        #         "website": product_data["website"],
-                        #         "category": product_data["category"],
-                        #     },
-                        #     {"$set": product_data},
-                        #     upsert=True
-                        # )
+                        collection.update_one(
+                            {
+                                "name": product_data["name"],
+                                "website": product_data["website"],
+                            },
+                            {"$set": product_data},
+                            upsert=True
+                        )
 
                         print(product_data)
                         print("------")

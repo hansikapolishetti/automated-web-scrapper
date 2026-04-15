@@ -214,7 +214,7 @@ async def scrape_amazon():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "amazon",
-                            "category": "laptop",
+                            "category": "laptops",
                             "currency": "INR",
                             "source_text": feature_text or UNKNOWN_TEXT,
                             "search_query": search_query,

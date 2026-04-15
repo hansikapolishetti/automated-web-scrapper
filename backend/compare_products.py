@@ -15,9 +15,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--query", default="")
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--category", default="laptops")
     args = parser.parse_args()
 
-    payload = comparison_payload(query=args.query.strip(), limit=args.limit)
+    payload = comparison_payload(query=args.query.strip(), limit=args.limit, category=args.category.strip().lower())
     print(json.dumps(payload, ensure_ascii=False))
 
 

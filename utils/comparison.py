@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 
-from database.db import collection
+from database.db import get_collection
 from utils.feature_extractor import normalize_text
 
 
@@ -37,6 +37,51 @@ NOISE_TOKENS = {
     "qhd",
     "uhd",
     "displayport",
+}
+MOBILE_NOISE_TOKENS = {
+    "mobile",
+    "mobiles",
+    "phone",
+    "phones",
+    "smartphone",
+    "smartphones",
+    "android",
+    "camera",
+    "battery",
+    "display",
+    "storage",
+    "ram",
+    "inch",
+    "inches",
+    "with",
+    "for",
+    "and",
+    "plus",
+    "dual",
+    "sim",
+    "bluetooth",
+}
+TV_NOISE_TOKENS = {
+    "tv",
+    "tvs",
+    "television",
+    "smart",
+    "smarttv",
+    "smart-tv",
+    "led",
+    "qled",
+    "oled",
+    "google",
+    "android",
+    "ultra",
+    "uhd",
+    "hd",
+    "full",
+    "inch",
+    "inches",
+    "with",
+    "for",
+    "and",
 }
 
 
@@ -78,6 +123,36 @@ def tokenize_name(name):
             continue
         tokens.append(token)
     return set(tokens)
+
+
+def comparable_mobile_name(name):
+    cleaned = normalize_value(name)
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    return " ".join(token for token in cleaned.split() if token not in MOBILE_NOISE_TOKENS)
+
+
+def tokenize_mobile_name(name):
+    cleaned = comparable_mobile_name(name)
+    return {
+        token
+        for token in cleaned.split()
+        if len(token) > 1 and token not in MOBILE_NOISE_TOKENS
+    }
+
+
+def comparable_tv_name(name):
+    cleaned = normalize_value(name)
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    return " ".join(token for token in cleaned.split() if token not in TV_NOISE_TOKENS)
+
+
+def tokenize_tv_name(name):
+    cleaned = comparable_tv_name(name)
+    return {
+        token
+        for token in cleaned.split()
+        if len(token) > 1 and token not in TV_NOISE_TOKENS
+    }
 
 
 def processor_family(processor):
@@ -159,6 +234,54 @@ def variant_family(name):
     return " ".join(tokens[:3])
 
 
+def mobile_variant_family(name):
+    cleaned = comparable_mobile_name(name)
+    patterns = [
+        r"\biphone\s+\d+\b",
+        r"\bgalaxy\s+[a-z]\d+\b",
+        r"\bgalaxy\s+s\d+\b",
+        r"\bnord\s+\w+\b",
+        r"\bnote\s+\d+\b",
+        r"\bredmi\s+\w+\b",
+        r"\bpoco\s+\w+\b",
+        r"\bmoto\s+\w+\b",
+        r"\bv\d+\b",
+        r"\by\d+\b",
+        r"\breno\s+\w+\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, cleaned, re.IGNORECASE)
+        if match:
+            return match.group()
+
+    tokens = cleaned.split()
+    return " ".join(tokens[:3])
+
+
+def tv_variant_family(name):
+    cleaned = comparable_tv_name(name)
+    patterns = [
+        r"\bbravia\s+\w+\b",
+        r"\bcrystal\s+\w+\b",
+        r"\bqned\s+\w+\b",
+        r"\bmi\s+tv\s+\w+\b",
+        r"\bvu\s+\w+\b",
+        r"\ba\d+\b",
+        r"\bc\d+\b",
+        r"\bd\d+\b",
+        r"\bp\d+\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, cleaned, re.IGNORECASE)
+        if match:
+            return match.group()
+
+    tokens = cleaned.split()
+    return " ".join(tokens[:3])
+
+
 def score_products(left, right):
     score = 0
     reasons = []
@@ -228,6 +351,118 @@ def score_products(left, right):
     return score, reasons
 
 
+def score_mobile_products(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    score = 20
+    reasons = ["brand"]
+
+    left_ram = left.get("ram")
+    right_ram = right.get("ram")
+    if is_known(left_ram) and is_known(right_ram):
+        if normalize_value(left_ram) != normalize_value(right_ram):
+            return 0, []
+        score += 14
+        reasons.append("ram")
+
+    left_storage = left.get("storage")
+    right_storage = right.get("storage")
+    if is_known(left_storage) and is_known(right_storage):
+        if normalize_value(left_storage) != normalize_value(right_storage):
+            return 0, []
+        score += 16
+        reasons.append("storage")
+
+    left_processor = left.get("processor")
+    right_processor = right.get("processor")
+    if is_known(left_processor) and is_known(right_processor):
+        if normalize_value(left_processor) == normalize_value(right_processor):
+            score += 24
+            reasons.append("processor_exact")
+        elif processor_family(left_processor) == processor_family(right_processor):
+            score += 16
+            reasons.append("processor_family")
+        else:
+            return 0, []
+
+    left_variant = mobile_variant_family(left.get("name", ""))
+    right_variant = mobile_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 14
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_mobile_name(left.get("name", "")),
+        tokenize_mobile_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.25:
+        title_points = min(18, round(title_similarity * 24))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_size", 8), ("battery", 8), ("network", 6), ("camera", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
+
+    if title_similarity < 0.25 and "variant_family" not in reasons:
+        return 0, []
+
+    return score, reasons
+
+
+def score_tv_products(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    score = 20
+    reasons = ["brand"]
+
+    core_equal_fields = (("screen_size", 16), ("resolution", 18))
+    for field, points in core_equal_fields:
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value):
+            if normalize_value(left_value) != normalize_value(right_value):
+                return 0, []
+            score += points
+            reasons.append(field)
+
+    left_variant = tv_variant_family(left.get("name", ""))
+    right_variant = tv_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 16
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_tv_name(left.get("name", "")),
+        tokenize_tv_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.2:
+        title_points = min(18, round(title_similarity * 24))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_type", 8), ("smart_tv", 8), ("refresh_rate", 8), ("operating_system", 8), ("audio_output", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
+
+    if title_similarity < 0.2 and "variant_family" not in reasons:
+        return 0, []
+
+    return score, reasons
+
+
 def compare_field(left, right, field):
     left_value = left.get(field)
     right_value = right.get(field)
@@ -258,6 +493,52 @@ def build_differences(left, right):
         "processor",
         "ram",
         "storage",
+    ]
+    differences = {}
+    for field in fields:
+        result = compare_field(left, right, field)
+        if result["status"] != "same":
+            differences[field] = result
+    return differences
+
+
+def build_mobile_differences(left, right):
+    fields = [
+        "price",
+        "original_price",
+        "discount_percent",
+        "rating",
+        "review_count",
+        "processor",
+        "ram",
+        "storage",
+        "display_size",
+        "battery",
+        "camera",
+        "network",
+    ]
+    differences = {}
+    for field in fields:
+        result = compare_field(left, right, field)
+        if result["status"] != "same":
+            differences[field] = result
+    return differences
+
+
+def build_tv_differences(left, right):
+    fields = [
+        "price",
+        "original_price",
+        "discount_percent",
+        "rating",
+        "review_count",
+        "screen_size",
+        "resolution",
+        "display_type",
+        "smart_tv",
+        "refresh_rate",
+        "audio_output",
+        "operating_system",
     ]
     differences = {}
     for field in fields:
@@ -326,6 +607,104 @@ def score_spec_match(left, right):
             elif normalize_value(left_value) == normalize_value(right_value):
                 score += points
                 reasons.append(field)
+
+    return score, reasons
+
+
+def score_mobile_spec_match(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    left_ram = left.get("ram")
+    right_ram = right.get("ram")
+    left_storage = left.get("storage")
+    right_storage = right.get("storage")
+    if not (
+        is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) == normalize_value(right_ram)
+        and is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) == normalize_value(right_storage)
+    ):
+        return 0, []
+
+    left_processor = left.get("processor")
+    right_processor = right.get("processor")
+    if not (is_known(left_processor) and is_known(right_processor)):
+        return 0, []
+
+    left_proc_family = processor_family(left_processor)
+    right_proc_family = processor_family(right_processor)
+    if left_proc_family != right_proc_family:
+        return 0, []
+
+    score = 20 + 15 + 15 + 18
+    reasons = ["brand", "ram", "storage", "processor_family"]
+
+    left_variant = mobile_variant_family(left.get("name", ""))
+    right_variant = mobile_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 12
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_mobile_name(left.get("name", "")),
+        tokenize_mobile_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.12:
+        title_points = min(12, round(title_similarity * 18))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_size", 8), ("battery", 8), ("network", 6), ("camera", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
+
+    return score, reasons
+
+
+def score_tv_spec_match(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    left_screen = left.get("screen_size")
+    right_screen = right.get("screen_size")
+    left_resolution = left.get("resolution")
+    right_resolution = right.get("resolution")
+    if not (
+        is_known(left_screen) and is_known(right_screen) and normalize_value(left_screen) == normalize_value(right_screen)
+        and is_known(left_resolution) and is_known(right_resolution) and normalize_value(left_resolution) == normalize_value(right_resolution)
+    ):
+        return 0, []
+
+    score = 20 + 18 + 18
+    reasons = ["brand", "screen_size", "resolution"]
+
+    left_variant = tv_variant_family(left.get("name", ""))
+    right_variant = tv_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 14
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_tv_name(left.get("name", "")),
+        tokenize_tv_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.12:
+        title_points = min(14, round(title_similarity * 20))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_type", 8), ("smart_tv", 8), ("refresh_rate", 6), ("operating_system", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
 
     return score, reasons
 
@@ -405,6 +784,135 @@ def score_variant_match(left, right):
     return score, reasons
 
 
+def score_mobile_variant_match(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    left_ram = left.get("ram")
+    right_ram = right.get("ram")
+    left_storage = left.get("storage")
+    right_storage = right.get("storage")
+    if not (
+        is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) == normalize_value(right_ram)
+        and is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) == normalize_value(right_storage)
+    ):
+        return 0, []
+
+    left_processor = left.get("processor")
+    right_processor = right.get("processor")
+    if not (is_known(left_processor) and is_known(right_processor)):
+        return 0, []
+
+    if processor_family(left_processor) != processor_family(right_processor):
+        return 0, []
+
+    score = 20 + 15 + 15 + 18
+    reasons = ["brand", "ram", "storage", "processor_family"]
+
+    left_variant = mobile_variant_family(left.get("name", ""))
+    right_variant = mobile_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 16
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_mobile_name(left.get("name", "")),
+        tokenize_mobile_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.18:
+        title_points = min(16, round(title_similarity * 22))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_size", 8), ("battery", 8), ("network", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
+
+    if "variant_family" not in reasons and title_similarity < 0.18:
+        return 0, []
+
+    return score, reasons
+
+
+def score_tv_variant_match(left, right):
+    left_brand = normalize_value(left.get("brand"))
+    right_brand = normalize_value(right.get("brand"))
+    if not left_brand or left_brand != right_brand:
+        return 0, []
+
+    left_screen = left.get("screen_size")
+    right_screen = right.get("screen_size")
+    if not (
+        is_known(left_screen) and is_known(right_screen) and normalize_value(left_screen) == normalize_value(right_screen)
+    ):
+        return 0, []
+
+    score = 20 + 16
+    reasons = ["brand", "screen_size"]
+
+    left_resolution = left.get("resolution")
+    right_resolution = right.get("resolution")
+    if is_known(left_resolution) and is_known(right_resolution):
+        if normalize_value(left_resolution) != normalize_value(right_resolution):
+            return 0, []
+        score += 16
+        reasons.append("resolution")
+
+    left_variant = tv_variant_family(left.get("name", ""))
+    right_variant = tv_variant_family(right.get("name", ""))
+    if left_variant and right_variant and left_variant == right_variant:
+        score += 16
+        reasons.append("variant_family")
+
+    title_similarity = jaccard_similarity(
+        tokenize_tv_name(left.get("name", "")),
+        tokenize_tv_name(right.get("name", "")),
+    )
+    if title_similarity >= 0.18:
+        title_points = min(16, round(title_similarity * 22))
+        score += title_points
+        reasons.append(f"title:{title_points}")
+
+    for field, points in (("display_type", 8), ("smart_tv", 8), ("refresh_rate", 6)):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
+            score += points
+            reasons.append(field)
+
+    if "variant_family" not in reasons and title_similarity < 0.18:
+        return 0, []
+
+    return score, reasons
+
+
+def choose_mobile_variant_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_mobile_variant_match(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 58:
+        return None
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+    }
+
+
 def choose_variant_match(left, candidates):
     best_match = None
     best_score = 0
@@ -449,6 +957,50 @@ def choose_spec_match(left, candidates):
     }
 
 
+def choose_mobile_spec_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_mobile_spec_match(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 48:
+        return None
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+    }
+
+
+def choose_tv_spec_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_tv_spec_match(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 46:
+        return None
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+    }
+
+
 def choose_match(left, candidates):
     best_match = None
     best_score = 0
@@ -476,38 +1028,138 @@ def choose_match(left, candidates):
     }
 
 
-def comparison_payload(query=None, limit=20):
+def choose_mobile_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_mobile_products(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 52:
+        return None
+
+    category = "possible"
+    if best_score >= 82:
+        category = "high_confidence"
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+        "category": category,
+    }
+
+
+def choose_tv_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_tv_products(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 56:
+        return None
+
+    category = "possible"
+    if best_score >= 82:
+        category = "high_confidence"
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+        "category": category,
+    }
+
+
+def choose_tv_variant_match(left, candidates):
+    best_match = None
+    best_score = 0
+    best_reasons = []
+
+    for candidate in candidates:
+        score, reasons = score_tv_variant_match(left, candidate)
+        if score > best_score:
+            best_match = candidate
+            best_score = score
+            best_reasons = reasons
+
+    if best_score < 56:
+        return None
+
+    return {
+        "match": best_match,
+        "score": best_score,
+        "reasons": best_reasons,
+    }
+
+
+def comparison_payload(query=None, limit=20, category="laptops"):
     mongo_query = {}
     if query:
         mongo_query["name"] = {"$regex": re.escape(query), "$options": "i"}
 
+    collection = get_collection(category)
+    normalized_category = (category or "laptops").strip().lower()
+    is_mobile_category = normalized_category == "mobiles"
+    is_tv_category = normalized_category == "tvs"
+
+    projection = {
+        "_id": 0,
+        "name": 1,
+        "price": 1,
+        "original_price": 1,
+        "discount_amount": 1,
+        "discount_percent": 1,
+        "rating": 1,
+        "review_count": 1,
+        "link": 1,
+        "image": 1,
+        "website": 1,
+        "category": 1,
+        "currency": 1,
+        "brand": 1,
+        "ram": 1,
+        "storage": 1,
+        "processor": 1,
+        "last_seen_at": 1,
+    }
+    if is_mobile_category:
+        projection.update({
+            "display_size": 1,
+            "camera": 1,
+            "battery": 1,
+            "network": 1,
+        })
+    elif is_tv_category:
+        projection.update({
+            "screen_size": 1,
+            "resolution": 1,
+            "display_type": 1,
+            "smart_tv": 1,
+            "refresh_rate": 1,
+            "audio_output": 1,
+            "operating_system": 1,
+        })
+    else:
+        projection.update({
+            "screen_size": 1,
+            "gpu": 1,
+            "model_code": 1,
+        })
+
     products = list(
-        collection.find(
-            mongo_query,
-            {
-                "_id": 0,
-                "name": 1,
-                "price": 1,
-                "original_price": 1,
-                "discount_amount": 1,
-                "discount_percent": 1,
-                "rating": 1,
-                "review_count": 1,
-                "link": 1,
-                "image": 1,
-                "website": 1,
-                "category": 1,
-                "currency": 1,
-                "brand": 1,
-                "ram": 1,
-                "storage": 1,
-                "processor": 1,
-                "screen_size": 1,
-                "gpu": 1,
-                "model_code": 1,
-                "last_seen_at": 1,
-            },
-        )
+        collection.find(mongo_query, projection)
     )
 
     amazon_products = [product for product in products if product.get("website") == "amazon"]
@@ -527,9 +1179,27 @@ def comparison_payload(query=None, limit=20):
         if not candidate_group:
             continue
 
-        variant_result = choose_variant_match(amazon_product, candidate_group)
-        spec_result = choose_spec_match(amazon_product, candidate_group)
-        result = choose_match(amazon_product, candidate_group)
+        variant_result = (
+            choose_mobile_variant_match(amazon_product, candidate_group)
+            if is_mobile_category
+            else choose_tv_variant_match(amazon_product, candidate_group)
+            if is_tv_category
+            else choose_variant_match(amazon_product, candidate_group)
+        )
+        spec_result = (
+            choose_mobile_spec_match(amazon_product, candidate_group)
+            if is_mobile_category
+            else choose_tv_spec_match(amazon_product, candidate_group)
+            if is_tv_category
+            else choose_spec_match(amazon_product, candidate_group)
+        )
+        result = (
+            choose_mobile_match(amazon_product, candidate_group)
+            if is_mobile_category
+            else choose_tv_match(amazon_product, candidate_group)
+            if is_tv_category
+            else choose_match(amazon_product, candidate_group)
+        )
 
         if result:
             flipkart_product = result["match"]
@@ -541,7 +1211,13 @@ def comparison_payload(query=None, limit=20):
                 "match_reasons": result["reasons"],
                 "amazon": amazon_product,
                 "flipkart": flipkart_product,
-                "differences": build_differences(amazon_product, flipkart_product),
+                "differences": (
+                    build_mobile_differences(amazon_product, flipkart_product)
+                    if is_mobile_category
+                    else build_tv_differences(amazon_product, flipkart_product)
+                    if is_tv_category
+                    else build_differences(amazon_product, flipkart_product)
+                ),
                 "price_difference": abs(amazon_price - flipkart_price),
                 "cheaper_site": (
                     "same"
@@ -576,7 +1252,13 @@ def comparison_payload(query=None, limit=20):
                 "match_reasons": variant_result["reasons"],
                 "amazon": amazon_product,
                 "flipkart": matched,
-                "differences": build_differences(amazon_product, matched),
+                "differences": (
+                    build_mobile_differences(amazon_product, matched)
+                    if is_mobile_category
+                    else build_tv_differences(amazon_product, matched)
+                    if is_tv_category
+                    else build_differences(amazon_product, matched)
+                ),
                 "price_difference": abs(amazon_price - flipkart_price),
                 "cheaper_site": (
                     "same"
@@ -599,7 +1281,13 @@ def comparison_payload(query=None, limit=20):
                 "match_reasons": spec_result["reasons"],
                 "amazon": amazon_product,
                 "flipkart": matched,
-                "differences": build_differences(amazon_product, matched),
+                "differences": (
+                    build_mobile_differences(amazon_product, matched)
+                    if is_mobile_category
+                    else build_tv_differences(amazon_product, matched)
+                    if is_tv_category
+                    else build_differences(amazon_product, matched)
+                ),
                 "price_difference": abs(amazon_price - flipkart_price),
                 "cheaper_site": (
                     "same"
@@ -631,6 +1319,7 @@ def comparison_payload(query=None, limit=20):
     )
     return {
         "query": query or "",
+        "category": normalized_category,
         "high_confidence_total": len(exact_matches),
         "exact_total": len(exact_matches),
         "variant_total": len(variant_matches),

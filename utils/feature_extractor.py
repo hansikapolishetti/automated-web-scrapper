@@ -280,12 +280,21 @@ def get_gpu(name):
         r'\bAMD\s+Radeon\s+iGPU\b',
         r'\bRadeon\s+\d+[A-Z]*M?\b',
         r'\bRadeon\s+Graphics\b',
+        r'\bIntegrated\s+Graphics\b',
+        r'\bShared\s+Graphics\b',
+        r'\bUMA\s+Graphics\b',
     ]
 
     for pattern in patterns:
         match = re.search(pattern, normalized, re.IGNORECASE)
         if match:
             return " ".join(match.group().split())
+
+    lowered = normalized.lower()
+    if "intel" in lowered and "graphics" in lowered:
+        return "Intel Graphics"
+    if "radeon" in lowered:
+        return "AMD Radeon Graphics"
 
     return UNKNOWN_GPU
 

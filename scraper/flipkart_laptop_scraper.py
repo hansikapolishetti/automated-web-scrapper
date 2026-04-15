@@ -206,7 +206,7 @@ async def scrape_flipkart():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "flipkart",
-                            "category": "laptop",
+                            "category": "laptops",
                             "currency": "INR",
                             "source_text": text_for_features or name or UNKNOWN_TEXT,
                             "search_query": search_query,
