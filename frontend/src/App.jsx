@@ -1,7 +1,6 @@
 ﻿import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 const API_URL = "http://localhost:5000/compare";
-const QUICK_BRANDS = ["asus", "hp", "lenovo", "dell", "acer", "msi"];
 const MATCH_TABS = [
   { id: "all", label: "All Comparable" },
   { id: "exact", label: "Exact Match" },
@@ -15,25 +14,68 @@ const CATEGORIES = [
     title: "Laptops",
     tagline: "Live now",
     description: "Matched Amazon and Flipkart listings with comparison tiers and better-deal callouts.",
+    eyebrow: "Laptops",
+    heroText: "Search a laptop name or paste a product link to compare Amazon and Flipkart faster.",
+    searchPlaceholder: "Search laptop model or paste Amazon / Flipkart link",
+    workspaceTitle: "Matched laptop comparisons",
+    workspaceText:
+      "Focus on strong overlap first. Exact matches, family-level variants, and broader spec-comparable pairs all stay in one workspace.",
+    laneLabel: "Laptop lane",
+    statsSummary: "Primary laptop pairs ready for UI",
+    exactSummary: "Near-identical listings on both stores",
+    variantSummary: "Same family with variant-level differences",
+    bestValueSummary: "Pairs where one site is clearly cheaper",
+    quickBrands: ["asus", "hp", "lenovo", "dell", "acer", "msi"],
+    specFields: ["processor", "ram", "storage", "screen_size", "gpu"],
+    live: true,
   },
   {
     id: "mobiles",
     title: "Mobiles",
-    tagline: "Coming next",
-    description: "Chipset, storage, battery, and pricing comparisons once the next scraper lane is added.",
+    tagline: "Live now",
+    description: "Compare Amazon and Flipkart mobile listings by chipset, RAM, storage, battery, camera, and price.",
+    eyebrow: "Mobiles",
+    heroText: "Search a phone model or paste a product link to compare mobile deals across Amazon and Flipkart.",
+    searchPlaceholder: "Search mobile model or paste Amazon / Flipkart link",
+    workspaceTitle: "Matched mobile comparisons",
+    workspaceText:
+      "Compare phone listings with stronger mobile-aware matching across brand, model family, RAM, storage, battery, camera, network, and price.",
+    laneLabel: "Mobile lane",
+    statsSummary: "Primary mobile pairs ready for UI",
+    exactSummary: "Strong phone listing overlaps across both stores",
+    variantSummary: "Same phone family with small configuration differences",
+    bestValueSummary: "Phones where one store is notably cheaper",
+    quickBrands: ["samsung", "iphone", "oneplus", "vivo", "oppo", "realme"],
+    specFields: ["processor", "ram", "storage", "display_size", "camera", "battery", "network"],
+    live: true,
   },
   {
     id: "audio",
     title: "Audio",
     tagline: "Later",
     description: "Headphones and earbuds with price gaps, offer tracking, and overlap detection.",
+    live: false,
   },
 ];
+
+const CATEGORY_LOOKUP = Object.fromEntries(CATEGORIES.map((category) => [category.id, category]));
+const SHORT_QUERY_ALLOWLIST = new Set(
+  CATEGORIES.flatMap((category) => category.quickBrands || []).filter((brand) => brand.length < 3),
+);
+
+function activeCategoryConfig(categoryId) {
+  return CATEGORY_LOOKUP[categoryId] || CATEGORY_LOOKUP.laptops;
+}
 
 function extractQueryFromInput(input) {
   const value = input.trim();
   if (!value) {
     return "";
+  }
+
+  const lowerValue = value.toLowerCase();
+  if (SHORT_QUERY_ALLOWLIST.has(lowerValue)) {
+    return lowerValue;
   }
 
   try {
@@ -105,7 +147,7 @@ function differenceTone(status) {
   return "difference-card unknown";
 }
 
-function ProductPane({ siteLabel, product, accentClass }) {
+function ProductPane({ siteLabel, product, accentClass, specFields }) {
   const rating = formatRating(product.rating);
   const metaItems = [
     product.discount_percent > 0 ? `${product.discount_percent}% off` : null,
@@ -147,14 +189,7 @@ function ProductPane({ siteLabel, product, accentClass }) {
         </div>
       </div>
       <div className="spec-pill-row">
-        {[
-          specBadge("processor", product.processor),
-          specBadge("ram", product.ram),
-          specBadge("storage", product.storage),
-          specBadge("screen_size", product.screen_size),
-          specBadge("gpu", product.gpu),
-          specBadge("model_code", product.model_code),
-        ]}
+        {specFields.map((field) => specBadge(field, product[field]))}
       </div>
       <a className="details-link" href={product.link} target="_blank" rel="noreferrer">
         View product
@@ -163,11 +198,21 @@ function ProductPane({ siteLabel, product, accentClass }) {
   );
 }
 
-function ComparisonCard({ item }) {
-  const differenceEntries = Object.entries(item.differences || {}).filter(([, value]) => {
+function formatDifferenceValue(field, value) {
+  if (typeof value === "number" && ["price", "original_price", "discount_amount"].includes(field)) {
+    return formatPrice(value);
+  }
+  return value;
+}
+
+function ComparisonCard({ item, categoryConfig }) {
+  const differenceEntries = Object.entries(item.differences || {}).filter(([field, value]) => {
+    if (field === "model_code") {
+      return false;
+    }
     const leftKnown = isKnownValue(value.amazon);
     const rightKnown = isKnownValue(value.flipkart);
-    return leftKnown || rightKnown;
+    return leftKnown && rightKnown;
   });
 
   return (
@@ -188,8 +233,18 @@ function ComparisonCard({ item }) {
       </div>
 
       <div className="pane-grid">
-        <ProductPane siteLabel="Amazon" product={item.amazon} accentClass="amazon-pane" />
-        <ProductPane siteLabel="Flipkart" product={item.flipkart} accentClass="flipkart-pane" />
+        <ProductPane
+          siteLabel="Amazon"
+          product={item.amazon}
+          accentClass="amazon-pane"
+          specFields={categoryConfig.specFields}
+        />
+        <ProductPane
+          siteLabel="Flipkart"
+          product={item.flipkart}
+          accentClass="flipkart-pane"
+          specFields={categoryConfig.specFields}
+        />
       </div>
 
       <div className="differences-block">
@@ -203,10 +258,8 @@ function ComparisonCard({ item }) {
               <div className={differenceTone(value.status)} key={field}>
                 <small>{field.replaceAll("_", " ")}</small>
                 <strong>{value.status}</strong>
-                <span>Amazon: {typeof value.amazon === "number" ? formatPrice(value.amazon) : value.amazon}</span>
-                <span>
-                  Flipkart: {typeof value.flipkart === "number" ? formatPrice(value.flipkart) : value.flipkart}
-                </span>
+                <span>Amazon: {formatDifferenceValue(field, value.amazon)}</span>
+                <span>Flipkart: {formatDifferenceValue(field, value.flipkart)}</span>
               </div>
             ))
           ) : (
@@ -231,6 +284,7 @@ function App() {
   const [status, setStatus] = useState("Pick a category to start comparing.");
   const [loading, setLoading] = useState(false);
   const workspaceRef = useRef(null);
+  const categoryConfig = activeCategoryConfig(selectedCategory || "laptops");
 
   const deferredQuery = useDeferredValue(extractQueryFromInput(searchInput));
 
@@ -240,7 +294,7 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (selectedCategory !== "laptops") {
+    if (!selectedCategory || !activeCategoryConfig(selectedCategory).live) {
       setPayload(null);
       setLoading(false);
       setStatus("Pick a category to start comparing.");
@@ -255,7 +309,7 @@ function App() {
     }
 
     const controller = new AbortController();
-    const queryString = `?query=${encodeURIComponent(deferredQuery)}&limit=12`;
+    const queryString = `?query=${encodeURIComponent(deferredQuery)}&category=${encodeURIComponent(selectedCategory)}&limit=12`;
 
     setLoading(true);
     setStatus("Scanning comparable products...");
@@ -269,7 +323,15 @@ function App() {
       })
       .then((data) => {
         setPayload(data);
-        setStatus("Comparison data ready");
+        if ((data.all_comparable_total || 0) === 0) {
+          if ((data.amazon_source_total || 0) === 0 && (data.flipkart_source_total || 0) === 0) {
+            setStatus("No products found for this search.");
+          } else {
+            setStatus("No cross-store comparable products found yet for this search.");
+          }
+        } else {
+          setStatus("Comparison data ready");
+        }
       })
       .catch((error) => {
         if (error.name === "AbortError") {
@@ -349,7 +411,7 @@ function App() {
           <div className="hero-copy">
             <p className="hero-kicker">Compare prices across top stores</p>
             <h1>Find the better store price before you buy.</h1>
-            <p className="hero-text">Search a laptop name or paste a product link to compare Amazon and Flipkart faster.</p>
+            <p className="hero-text">{categoryConfig.heroText}</p>
             <div className="hero-actions">
               <button className="primary-action" onClick={() => openCategory("laptops")} type="button">
                 Start comparing
@@ -366,9 +428,9 @@ function App() {
                 <input
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Search laptop model or paste Amazon / Flipkart link"
+                  placeholder={categoryConfig.searchPlaceholder}
                 />
-                <button onClick={() => openCategory("laptops")} type="button">
+                <button onClick={() => openCategory(selectedCategory || "laptops")} type="button">
                   Search
                 </button>
               </div>
@@ -398,7 +460,7 @@ function App() {
                 <strong>{category.title}</strong>
               </div>
               <p>{category.description}</p>
-              {category.id === "laptops" ? (
+              {category.live ? (
                 <button className="category-action" onClick={() => openCategory(category.id)} type="button">
                   Slide into workspace
                 </button>
@@ -413,26 +475,26 @@ function App() {
       </section>
 
       <section
-        className={selectedCategory === "laptops" ? "workspace-shell open" : "workspace-shell"}
+        className={selectedCategory && categoryConfig.live ? "workspace-shell open" : "workspace-shell"}
         id="workspace"
         ref={workspaceRef}
       >
         <aside className="workspace-rail">
-          <span className="rail-pill">{selectedCategory === "laptops" ? "Laptop lane" : "Workspace locked"}</span>
-          <h3>{selectedCategory === "laptops" ? "Comparison workspace" : "Choose a category first"}</h3>
+          <span className="rail-pill">{selectedCategory && categoryConfig.live ? categoryConfig.laneLabel : "Workspace locked"}</span>
+          <h3>{selectedCategory && categoryConfig.live ? "Comparison workspace" : "Choose a category first"}</h3>
           <p>
-            {selectedCategory === "laptops"
+            {selectedCategory && categoryConfig.live
               ? "Use brand shortcuts, direct text search, or pasted product links to open the matched comparison feed."
               : "The comparison board stays hidden until a category is selected, so the homepage can stay discovery-first."}
           </p>
           <div className="rail-brand-list">
-            {QUICK_BRANDS.map((brand) => (
+            {categoryConfig.quickBrands?.map((brand) => (
               <button
                 className={brand === searchInput.trim().toLowerCase() ? "rail-chip active" : "rail-chip"}
                 key={brand}
                 onClick={() => {
-                  if (selectedCategory !== "laptops") {
-                    openCategory("laptops", brand);
+                  if (!selectedCategory || !categoryConfig.live) {
+                    openCategory(categoryConfig.id, brand);
                     return;
                   }
                   startTransition(() => {
@@ -451,15 +513,12 @@ function App() {
         <div className="workspace-panel">
           <div className="workspace-head">
             <div>
-              <p className="eyebrow">Laptops</p>
-              <h2>Matched laptop comparisons</h2>
-              <p className="workspace-text">
-                Focus on strong overlap first. Exact matches, family-level variants, and broader spec-comparable pairs
-                all stay in one workspace.
-              </p>
+              <p className="eyebrow">{categoryConfig.eyebrow}</p>
+              <h2>{categoryConfig.workspaceTitle}</h2>
+              <p className="workspace-text">{categoryConfig.workspaceText}</p>
             </div>
             <label className="workspace-search">
-              <span>Search inside laptop comparisons</span>
+              <span>Search inside {categoryConfig.eyebrow.toLowerCase()} comparisons</span>
               <input
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
@@ -472,22 +531,22 @@ function App() {
             <div className="stat-card">
               <span>All comparable</span>
               <strong>{payload?.all_comparable_total ?? 0}</strong>
-              <small>Primary laptop pairs ready for UI</small>
+              <small>{categoryConfig.statsSummary}</small>
             </div>
             <div className="stat-card">
               <span>Exact matches</span>
               <strong>{payload?.exact_total ?? 0}</strong>
-              <small>Near-identical listings on both stores</small>
+              <small>{categoryConfig.exactSummary}</small>
             </div>
             <div className="stat-card">
               <span>Variant matches</span>
               <strong>{payload?.variant_total ?? 0}</strong>
-              <small>Same family with variant-level differences</small>
+              <small>{categoryConfig.variantSummary}</small>
             </div>
             <div className="stat-card">
               <span>Best value</span>
               <strong>{payload?.best_value_total ?? 0}</strong>
-              <small>Pairs where one site is clearly cheaper</small>
+              <small>{categoryConfig.bestValueSummary}</small>
             </div>
           </section>
 
@@ -515,14 +574,18 @@ function App() {
           <section className="results-shell">
             {visibleItems.length ? (
               visibleItems.map((item, index) => (
-                <ComparisonCard item={item} key={`${item.amazon.link}-${item.flipkart.link}-${index}`} />
+                <ComparisonCard
+                  item={item}
+                  categoryConfig={categoryConfig}
+                  key={`${item.amazon.link}-${item.flipkart.link}-${index}`}
+                />
               ))
             ) : (
               <div className="empty-state">
                 <h2>No comparison cards in this bucket yet.</h2>
                 <p>
-                  {selectedCategory !== "laptops"
-                    ? "Pick the laptop lane to open the board."
+                  {!selectedCategory || !categoryConfig.live
+                    ? "Pick a live category lane to open the board."
                     : "Try another brand, or switch to All Comparable to see the broader match set."}
                 </p>
               </div>

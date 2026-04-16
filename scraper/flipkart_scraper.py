@@ -7,32 +7,55 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
 from playwright.async_api import async_playwright
-from database.db import collection
+from database.db import get_collection
 from utils.feature_extractor import extract_features
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
 UNKNOWN_IMAGE = "Unavailable"
 UNKNOWN_RATING = "Unknown"
+PRODUCT_CATEGORY = "laptop"
 SEARCH_QUERIES = [
     "laptops",
     "gaming laptop",
     "business laptop",
     "thin and light laptop",
     "asus laptop",
+    "asus vivobook laptop",
     "hp laptop",
+    "hp 15 laptop",
+    "hp 15s laptop",
     "lenovo laptop",
+    "lenovo ideapad laptop",
+    "lenovo loq laptop",
     "dell laptop",
+    "dell inspiron laptop",
+    "dell g15 laptop",
     "acer laptop",
+    "acer aspire laptop",
     "msi laptop",
+    "msi gaming laptop",
+    "msi thin 15 laptop",
+    "msi katana 15 laptop",
 ]
 BRAND_QUERY_MAP = {
     "asus laptop": "asus",
+    "asus vivobook laptop": "asus",
     "hp laptop": "hp",
+    "hp 15 laptop": "hp",
+    "hp 15s laptop": "hp",
     "lenovo laptop": "lenovo",
+    "lenovo ideapad laptop": "lenovo",
+    "lenovo loq laptop": "lenovo",
     "dell laptop": "dell",
+    "dell inspiron laptop": "dell",
+    "dell g15 laptop": "dell",
     "acer laptop": "acer",
+    "acer aspire laptop": "acer",
     "msi laptop": "msi",
+    "msi gaming laptop": "msi",
+    "msi thin 15 laptop": "msi",
+    "msi katana 15 laptop": "msi",
 }
 
 
@@ -99,7 +122,8 @@ def matches_brand_query(search_query, text):
 
 async def scrape_flipkart():
     seen = set()
-    max_pages = 3
+    max_pages = 5
+    collection = get_collection(PRODUCT_CATEGORY)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -206,7 +230,7 @@ async def scrape_flipkart():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "flipkart",
-                            "category": "laptop",
+                            "category": PRODUCT_CATEGORY,
                             "currency": "INR",
                             "source_text": text_for_features or name or UNKNOWN_TEXT,
                             "search_query": search_query,

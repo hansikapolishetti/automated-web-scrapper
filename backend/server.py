@@ -32,6 +32,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/compare":
             params = parse_qs(parsed.query)
             query = (params.get("query", [""])[0] or "").strip()
+            category = (params.get("category", ["laptop"])[0] or "laptop").strip()
             try:
                 limit = int(params.get("limit", ["20"])[0])
             except ValueError:
@@ -40,7 +41,7 @@ class Handler(BaseHTTPRequestHandler):
             limit = max(1, min(limit, 50))
 
             try:
-                payload = comparison_payload(query=query, limit=limit)
+                payload = comparison_payload(query=query, limit=limit, category=category)
                 self._send_json(200, payload)
             except Exception as error:
                 self._send_json(500, {

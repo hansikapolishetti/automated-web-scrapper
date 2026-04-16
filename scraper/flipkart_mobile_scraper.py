@@ -1,24 +1,31 @@
 import sys
 import os
 import re
+from datetime import datetime, timezone
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
 from playwright.async_api import async_playwright
-# from database.db import collection   # Database import disabled
+from database.db import get_collection
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
 UNKNOWN_IMAGE = "Unavailable"
 UNKNOWN_VALUE = "Unknown"
+PRODUCT_CATEGORY = "mobile"
 
 SEARCH_QUERIES = [
     "smartphones",
     "5g mobile",
     "android phone",
     "iphone",
+    "apple iphone",
+    "iphone 16",
+    "iphone 15",
+    "iphone pro",
     "samsung mobile",
+    "samsung galaxy phone",
     "oneplus mobile",
     "vivo mobile",
     "oppo mobile",
@@ -30,7 +37,12 @@ SEARCH_QUERIES = [
 
 BRAND_QUERY_MAP = {
     "iphone": "apple",
+    "apple iphone": "apple",
+    "iphone 16": "apple",
+    "iphone 15": "apple",
+    "iphone pro": "apple",
     "samsung mobile": "samsung",
+    "samsung galaxy phone": "samsung",
     "oneplus mobile": "oneplus",
     "vivo mobile": "vivo",
     "oppo mobile": "oppo",
@@ -228,7 +240,8 @@ def extract_mobile_specs(text):
 async def scrape_flipkart_mobile():
 
     seen = set()
-    max_pages = 3
+    max_pages = 5
+    collection = get_collection(PRODUCT_CATEGORY)
 
     async with async_playwright() as p:
 
@@ -303,23 +316,23 @@ async def scrape_flipkart_mobile():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "flipkart",
-                            "category": "mobile",
+                            "category": PRODUCT_CATEGORY,
+                            "currency": "INR",
                             "source_text": text_for_features or name or UNKNOWN_TEXT,
                             "search_query": search_query,
+                            "last_seen_at": datetime.now(timezone.utc).isoformat(),
                         }
 
                         product_data.update(extract_mobile_specs(text_for_features))
 
-                        # Database disabled
-                        # collection.update_one(
-                        #     {
-                        #         "name": product_data["name"],
-                        #         "website": product_data["website"],
-                        #         "category": product_data["category"],
-                        #     },
-                        #     {"$set": product_data},
-                        #     upsert=True
-                        # )
+                        collection.update_one(
+                            {
+                                "name": product_data["name"],
+                                "website": product_data["website"],
+                            },
+                            {"$set": product_data},
+                            upsert=True
+                        )
 
                         print(product_data)
                         print("------")
