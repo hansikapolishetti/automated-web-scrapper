@@ -4,7 +4,7 @@ import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 import CategoryGrid from './components/CategoryGrid';
 import LoginPage from './pages/LoginPage';
-import ComparePage from './pages/ComparePage';
+import ComparePageDynamic from './pages/ComparePageDynamic';
 import CategoriesPage from './pages/CategoriesPage';
 import CategoryProductsPage from './pages/CategoryProductsPage';
 import SearchResultsPage from './pages/SearchResultsPage';
@@ -38,7 +38,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/compare" element={<ComparePage />} />
+        <Route path="/compare" element={<ComparePageDynamic />} />
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/category/:categoryName" element={<CategoryProductsPage />} />
         <Route path="/search" element={<SearchResultsPage />} />

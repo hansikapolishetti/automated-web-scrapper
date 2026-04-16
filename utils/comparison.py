@@ -338,6 +338,8 @@ def score_products(left, right):
             reasons.append("processor_family")
         else:
             return 0, []
+    elif is_known(left_processor) != is_known(right_processor):
+        return 0, []
 
     for field, points in (("ram", 12), ("storage", 12), ("screen_size", 10), ("gpu", 10)):
         left_value = left.get(field)
@@ -367,6 +369,8 @@ def score_mobile_products(left, right):
             return 0, []
         score += 14
         reasons.append("ram")
+    elif is_known(left_ram) != is_known(right_ram):
+        return 0, []
 
     left_storage = left.get("storage")
     right_storage = right.get("storage")
@@ -375,6 +379,8 @@ def score_mobile_products(left, right):
             return 0, []
         score += 16
         reasons.append("storage")
+    elif is_known(left_storage) != is_known(right_storage):
+        return 0, []
 
     left_processor = left.get("processor")
     right_processor = right.get("processor")
@@ -387,6 +393,8 @@ def score_mobile_products(left, right):
             reasons.append("processor_family")
         else:
             return 0, []
+    elif is_known(left_processor) != is_known(right_processor):
+        return 0, []
 
     left_variant = mobile_variant_family(left.get("name", ""))
     right_variant = mobile_variant_family(right.get("name", ""))
@@ -434,6 +442,8 @@ def score_tv_products(left, right):
                 return 0, []
             score += points
             reasons.append(field)
+        elif is_known(left_value) != is_known(right_value):
+            return 0, []
 
     left_variant = tv_variant_family(left.get("name", ""))
     right_variant = tv_variant_family(right.get("name", ""))
@@ -903,7 +913,7 @@ def choose_mobile_variant_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 58:
+    if best_score < 70:
         return None
 
     return {
@@ -925,7 +935,7 @@ def choose_variant_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 68:
+    if best_score < 80:
         return None
 
     return {
@@ -947,7 +957,7 @@ def choose_spec_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 50:
+    if best_score < 72:
         return None
 
     return {
@@ -969,7 +979,7 @@ def choose_mobile_spec_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 48:
+    if best_score < 70:
         return None
 
     return {
@@ -991,7 +1001,7 @@ def choose_tv_spec_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 46:
+    if best_score < 68:
         return None
 
     return {
@@ -1013,11 +1023,11 @@ def choose_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 55:
+    if best_score < 80:
         return None
 
     category = "possible"
-    if best_score >= 85:
+    if best_score >= 95:
         category = "high_confidence"
 
     return {
@@ -1040,11 +1050,11 @@ def choose_mobile_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 52:
+    if best_score < 78:
         return None
 
     category = "possible"
-    if best_score >= 82:
+    if best_score >= 92:
         category = "high_confidence"
 
     return {
@@ -1067,11 +1077,11 @@ def choose_tv_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 56:
+    if best_score < 76:
         return None
 
     category = "possible"
-    if best_score >= 82:
+    if best_score >= 90:
         category = "high_confidence"
 
     return {
@@ -1094,7 +1104,7 @@ def choose_tv_variant_match(left, candidates):
             best_score = score
             best_reasons = reasons
 
-    if best_score < 56:
+    if best_score < 72:
         return None
 
     return {
@@ -1162,8 +1172,8 @@ def comparison_payload(query=None, limit=20, category="laptops"):
         collection.find(mongo_query, projection)
     )
 
-    amazon_products = [product for product in products if product.get("website") == "amazon"]
-    flipkart_products = [product for product in products if product.get("website") == "flipkart"]
+    amazon_products = [product for product in products if product.get("website") == "amazon" and normalize_value(product.get("brand"))]
+    flipkart_products = [product for product in products if product.get("website") == "flipkart" and normalize_value(product.get("brand"))]
     flipkart_by_brand = build_candidate_groups(flipkart_products)
 
     exact_matches = []
