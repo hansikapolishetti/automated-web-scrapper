@@ -6,12 +6,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
 from playwright.async_api import async_playwright
-# from database.db import collection   # Database import disabled
+from database.db import get_collection
+from utils.mobile_feature_extractor import extract_mobile_features
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
 UNKNOWN_IMAGE = "Unavailable"
 UNKNOWN_VALUE = "Unknown"
+collection = get_collection("mobiles")
 
 SEARCH_QUERIES = [
     "smartphones",
@@ -303,23 +305,21 @@ async def scrape_flipkart_mobile():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "flipkart",
-                            "category": "mobile",
+                            "category": "mobiles",
                             "source_text": text_for_features or name or UNKNOWN_TEXT,
                             "search_query": search_query,
                         }
 
-                        product_data.update(extract_mobile_specs(text_for_features))
+                        product_data.update(extract_mobile_features(text_for_features))
 
-                        # Database disabled
-                        # collection.update_one(
-                        #     {
-                        #         "name": product_data["name"],
-                        #         "website": product_data["website"],
-                        #         "category": product_data["category"],
-                        #     },
-                        #     {"$set": product_data},
-                        #     upsert=True
-                        # )
+                        collection.update_one(
+                            {
+                                "name": product_data["name"],
+                                "website": product_data["website"],
+                            },
+                            {"$set": product_data},
+                            upsert=True
+                        )
 
                         print(product_data)
                         print("------")

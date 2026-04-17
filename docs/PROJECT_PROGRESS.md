@@ -13,7 +13,7 @@ Main work:
 - added base feature extraction for `brand`, `ram`, `storage`, and `processor`
 
 Outcome:
-- products from both sites can be stored in the `products` collection
+- products from both sites can be stored in category-specific collections, starting with `laptops`
 
 Suggested commit theme:
 - `Add scraper pipeline and normalized product storage`

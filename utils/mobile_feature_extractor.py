@@ -69,8 +69,10 @@ def get_ram(text):
     patterns = [
         r"\b(\d+)\s*GB\s*RAM\b",
         r"\bRAM\s*[:\-]?\s*(\d+)\s*GB\b",
+        r"\b(\d+)\s*GB\s*(?:LPDDR\dX?|Memory)\b",
         r"\b(\d+)\s*GB\s*/\s*(128|256|512|\d+)\s*(GB|TB)\b",
         r"\b(\d+)\s*-\s*(128|256|512|\d+)\s*(GB|TB)\b",
+        r"\b(\d+)\s*GB\s*\+\s*(64|128|256|512|\d+)\s*(GB|TB)\b",
     ]
 
     for pattern in patterns:
@@ -86,6 +88,7 @@ def get_storage(text):
     patterns = [
         r"\b\d+\s*GB\s*/\s*(\d+)\s*(TB|GB)\b",
         r"\b\d+\s*-\s*(\d+)\s*(TB|GB)\b",
+        r"\b\d+\s*GB\s*\+\s*(\d+)\s*(TB|GB)\b",
         r"\b(64|128|256|512|1024)\s*GB\s*(?:Storage|ROM|Internal Storage)?\b",
         r"\b(1|2)\s*TB\b",
     ]
@@ -108,17 +111,25 @@ def get_storage(text):
 def get_processor(text):
     normalized = normalize_text(text)
     patterns = [
-        r"\bSnapdragon\s+\d+\+?\s*(?:Gen\s*\d+)?\b",
+        r"\bSnapdragon\s+\d+(?:s|c)?\+?\s*(?:Elite|Gen\s*\d+)?\b",
         r"\bSnapdragon\s+[A-Z]?\d+\b",
+        r"\bSnapdragon\s+8\s+Elite\b",
         r"\bDimensity\s+\d{3,4}\b",
+        r"\bDimensity\s+\d{3,4}\s*Ultimate\b",
+        r"\bDimensity\s+\d{3,4}\s*Ultra\b",
+        r"\bDimensity\s+\d{3,4}\s*Energy\b",
         r"\bMediaTek\s+Dimensity\s+\d{3,4}\b",
+        r"\bMediaTek\s+Dimensity\s+\d{3,4}\s*(?:Ultimate|Ultra|Energy)?\b",
         r"\bHelio\s+[A-Z]?\d+\b",
         r"\bMediaTek\s+Helio\s+[A-Z]?\d+\b",
         r"\bTensor\s+[Gg]\d\b",
         r"\bExynos\s+\d{4}\b",
-        r"\bA1[0-9]\s+Bionic\b",
+        r"\bA1[0-9]\s+(?:Pro\s+)?Bionic\b",
+        r"\bA1[0-9]\s+Pro\b",
+        r"\bA1[0-9]\b",
         r"\bA\d+\s*Pro\b",
         r"\bBionic\s+A1[0-9]\b",
+        r"\bApple\s+A1[0-9]\b",
     ]
 
     for pattern in patterns:
@@ -134,6 +145,7 @@ def get_display_size(text):
     patterns = [
         r"\b(\d\.\d{1,2})\s*(?:inch|inches)\b",
         r"\b(\d\.\d{1,2})\s*\"\b",
+        r"\b(\d\.\d{1,2})\s*(?:cm)\b",
     ]
 
     for pattern in patterns:
@@ -177,6 +189,8 @@ def get_network(text):
     if "5G" in normalized:
         return "5G"
     if "4G" in normalized:
+        return "4G"
+    if "LTE" in normalized:
         return "4G"
     return UNKNOWN_NETWORK
 

@@ -10,10 +10,12 @@ from utils.tv_feature_extractor import extract_tv_features
 
 try:
     from pymongo.errors import PyMongoError
-    from database.db import collection
+    from database.db import get_collection
 except Exception:
     PyMongoError = Exception
     collection = None
+else:
+    collection = get_collection("tvs")
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
@@ -268,7 +270,7 @@ async def scrape_amazon_tv():
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
                             "website": "amazon",
-                            "category": "television",
+                            "category": "tvs",
                             "source_text": feature_text or UNKNOWN_TEXT,
                             "search_query": search_query,
                         }

@@ -7,10 +7,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from database.db import collection
+from database.db import get_collection
 
 
-def main():
+def backfill_collection(category):
+    collection = get_collection(category)
     now = datetime.now(timezone.utc).isoformat()
     updates = 0
 
@@ -31,7 +32,7 @@ def main():
     ):
         price = product.get("price") or 0
         update_fields = {
-            "category": product.get("category") or "laptop",
+            "category": product.get("category") or category,
             "currency": product.get("currency") or "INR",
             "original_price": product.get("original_price") or price,
             "discount_amount": product.get("discount_amount") or 0,
@@ -44,8 +45,9 @@ def main():
         collection.update_one({"_id": product["_id"]}, {"$set": update_fields})
         updates += 1
 
-    print(f"Backfilled {updates} products")
+    print(f"Backfilled {updates} {category} products")
 
 
 if __name__ == "__main__":
-    main()
+    for category in ("laptops", "mobiles", "tvs"):
+        backfill_collection(category)
