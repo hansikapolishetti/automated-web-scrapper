@@ -2,66 +2,46 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import CategorySidebar from '../components/filters/CategorySidebar';
 import ProductGrid from '../components/products/ProductGrid';
-
-const MOCK_PRODUCTS = [
-  {
-    title: "Apple MacBook Air M2 (2022) - Starlight",
-    price: "₹99,900",
-    oldPrice: "₹1,14,900",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/71vFKBpKakL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Lowest Ever"
-  },
-  {
-    title: "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
-    price: "₹26,990",
-    oldPrice: "₹34,990",
-    rating: 4.7,
-    image: "https://m.media-amazon.com/images/I/51aXvjzcukL._SX522_.jpg",
-    store: "Flipkart",
-    tag: "Great Deal"
-  },
-  {
-    title: "Samsung Galaxy S23 Ultra 5G (Phantom Black, 256GB)",
-    price: "₹1,24,999",
-    rating: 4.9,
-    image: "https://m.media-amazon.com/images/I/61VfL-aiToL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Above Average"
-  },
-  {
-    title: "Dell XPS 13 (2023) Ultrabook i7 13th Gen",
-    price: "₹1,10,500",
-    oldPrice: "₹1,30,000",
-    rating: 4.5,
-    image: "https://m.media-amazon.com/images/I/61r1H+N8ZQL._SX679_.jpg",
-    store: "Flipkart"
-  },
-  {
-    title: "Logitech MX Master 3S Advanced Wireless Mouse",
-    price: "₹8,995",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/61ni3t1ryQL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Lowest Ever"
-  },
-  {
-    title: "Apple iPhone 15 Pro (128 GB) - Natural Titanium",
-    price: "₹1,34,900",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/81+GIkwqLIL._SX679_.jpg",
-    store: "Flipkart"
-  }
-];
+import { fetchProducts } from '../lib/api';
 
 export default function CategoriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    // Scroll to top when page mounts
     window.scrollTo(0, 0);
+    
+    async function loadProducts() {
+      setLoading(true);
+      try {
+        // Fetch all products across categories for the marketplace view
+        const data = await fetchProducts({ limit: 48 });
+        // Map backend products to frontend ProductCard format
+        const formatted = (data.products || []).map(p => ({
+          title: p.name,
+          slug: p.slug,
+          price: `₹${p.price?.toLocaleString('en-IN')}`,
+          oldPrice: p.original_price ? `₹${p.original_price.toLocaleString('en-IN')}` : null,
+          rating: p.rating,
+          image: p.image,
+          store: p.brand, // Using brand as store for variety in mock-replacement
+          tag: p.price < 50000 ? "Great Deal" : null
+        }));
+        setProducts(formatted);
+      } catch (err) {
+        console.error('Failed to load marketplace products:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProducts();
   }, []);
+
+  const filteredProducts = products.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
@@ -95,7 +75,13 @@ export default function CategoriesPage() {
             
             {/* Product Grid Area */}
             <div className="flex-1">
-              <ProductGrid products={MOCK_PRODUCTS} />
+              {loading ? (
+                <div className="flex justify-center py-20">
+                  <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <ProductGrid products={filteredProducts} />
+              )}
             </div>
           </div>
           

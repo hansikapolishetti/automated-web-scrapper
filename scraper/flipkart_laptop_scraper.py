@@ -9,6 +9,7 @@ import asyncio
 from playwright.async_api import async_playwright
 from database.db import collection
 from utils.feature_extractor import extract_features
+from utils.slug_util import generate_slug
 
 UNKNOWN_TEXT = "Unknown"
 UNKNOWN_LINK = "Unavailable"
@@ -205,6 +206,8 @@ async def scrape_flipkart():
                             "review_count": review_count,
                             "link": full_link,
                             "image": image or UNKNOWN_IMAGE,
+                            "images": [image] if image else [UNKNOWN_IMAGE],
+                            "store": "Flipkart",
                             "website": "flipkart",
                             "category": "laptops",
                             "currency": "INR",
@@ -213,7 +216,14 @@ async def scrape_flipkart():
                             "last_seen_at": datetime.now(timezone.utc).isoformat(),
                         }
 
-                        product_data.update(extract_features(text_for_features))
+                        # Extract and structure specifications
+                        specs = extract_features(text_for_features)
+                        product_data["specifications"] = specs
+                        # Also merge for top-level access if comparison logic needs it
+                        product_data.update(specs)
+                        
+                        # Generate consistent slug
+                        product_data["slug"] = generate_slug(product_data.get("brand"), product_data["name"])
 
                         collection.update_one(
                             {

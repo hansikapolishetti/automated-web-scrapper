@@ -3,71 +3,73 @@ import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CategorySidebar from '../components/filters/CategorySidebar';
 import ProductGrid from '../components/products/ProductGrid';
+import { fetchProducts, fetchBrands } from '../lib/api';
 
-const MOCK_PRODUCTS = [
-  {
-    title: "Apple MacBook Air M2 (2022) - Starlight",
-    price: "₹99,900",
-    oldPrice: "₹1,14,900",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/71vFKBpKakL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Lowest Ever"
-  },
-  {
-    title: "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
-    price: "₹26,990",
-    oldPrice: "₹34,990",
-    rating: 4.7,
-    image: "https://m.media-amazon.com/images/I/51aXvjzcukL._SX522_.jpg",
-    store: "Flipkart",
-    tag: "Great Deal"
-  },
-  {
-    title: "Samsung Galaxy S23 Ultra 5G (Phantom Black, 256GB)",
-    price: "₹1,24,999",
-    rating: 4.9,
-    image: "https://m.media-amazon.com/images/I/61VfL-aiToL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Above Average"
-  },
-  {
-    title: "Dell XPS 13 (2023) Ultrabook i7 13th Gen",
-    price: "₹1,10,500",
-    oldPrice: "₹1,30,000",
-    rating: 4.5,
-    image: "https://m.media-amazon.com/images/I/61r1H+N8ZQL._SX679_.jpg",
-    store: "Flipkart"
-  },
-  {
-    title: "Logitech MX Master 3S Advanced Wireless Mouse",
-    price: "₹8,995",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/61ni3t1ryQL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Lowest Ever"
-  },
-  {
-    title: "Apple iPhone 15 Pro (128 GB) - Natural Titanium",
-    price: "₹1,34,900",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/81+GIkwqLIL._SX679_.jpg",
-    store: "Flipkart"
-  }
-];
+const formatPrice = (price) => {
+  if (!price) return "";
+  if (typeof price === 'string' && price.includes('₹')) return price;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(price);
+};
 
 export default function CategoryProductsPage() {
   const { categoryName } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    // Scroll to top when page mounts or category changes
     window.scrollTo(0, 0);
-  }, [categoryName]);
+    
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [prodData, brandData] = await Promise.all([
+          fetchProducts({ category: categoryName, brands: selectedBrands, limit: 24 }),
+          fetchBrands(categoryName)
+        ]);
+        
+        const mappedProducts = (prodData.products || []).map(p => ({
+          ...p,
+          title: p.name,
+          price: formatPrice(p.price),
+          oldPrice: formatPrice(p.original_price),
+          store: p.website ? p.website.charAt(0).toUpperCase() + p.website.slice(1) : 'Unknown'
+        }));
+        
+        setProducts(mappedProducts);
+        setBrands(brandData || []);
+      } catch (err) {
+        console.error("Failed to load category data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, [categoryName, selectedBrands]);
+
+  const handleBrandToggle = (brand) => {
+    setSelectedBrands(prev => 
+      prev.includes(brand) 
+        ? prev.filter(b => b !== brand) 
+        : [...prev, brand]
+    );
+  };
 
   const displayTitle = categoryName 
     ? categoryName.charAt(0).toUpperCase() + categoryName.slice(1).replace(/-/g, ' ') 
     : 'Category';
+
+  const filteredProducts = products.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.brand.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
@@ -77,9 +79,16 @@ export default function CategoryProductsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 lg:p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight lg:pl-2">
-              Browse {displayTitle}
-            </h1>
+            <div className="flex flex-col lg:pl-2">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                Browse {displayTitle}
+              </h1>
+              {!loading && (
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  {filteredProducts.length} Results {selectedBrands.length > 0 && `• ${selectedBrands.length} Brands Selected`}
+                </p>
+              )}
+            </div>
             
             <div className="relative w-full md:w-96 group">
               <input 
@@ -98,12 +107,29 @@ export default function CategoryProductsPage() {
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Sidebar */}
             <div className="w-full lg:w-[280px] flex-shrink-0">
-              <CategorySidebar />
+              <CategorySidebar 
+                brands={brands} 
+                selectedBrands={selectedBrands}
+                onBrandToggle={handleBrandToggle}
+                loading={loading} 
+              />
             </div>
             
             {/* Product Grid Area */}
             <div className="flex-1">
-              <ProductGrid products={MOCK_PRODUCTS} />
+              {loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="bg-white rounded-2xl border border-slate-100 p-6 h-80 animate-pulse">
+                      <div className="bg-slate-50 w-full h-40 rounded-xl mb-4"></div>
+                      <div className="h-4 bg-slate-50 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-slate-50 rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ProductGrid products={filteredProducts} />
+              )}
             </div>
           </div>
           

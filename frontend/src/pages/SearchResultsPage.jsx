@@ -3,59 +3,59 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import FilterSidebar from '../components/filters/FilterSidebar';
 import ProductGrid from '../components/products/ProductGrid';
-
-const MOCK_PRODUCTS = [
-  {
-    title: "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
-    price: "₹26,990",
-    oldPrice: "₹34,990",
-    rating: 4.7,
-    image: "https://m.media-amazon.com/images/I/51aXvjzcukL._SX522_.jpg",
-    store: "Flipkart",
-    tag: "Great Deal"
-  },
-  {
-    title: "Samsung Galaxy S23 Ultra 5G (Phantom Black, 256GB)",
-    price: "₹1,24,999",
-    rating: 4.9,
-    image: "https://m.media-amazon.com/images/I/61VfL-aiToL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Above Average"
-  },
-  {
-    title: "Dell XPS 13 (2023) Ultrabook i7 13th Gen",
-    price: "₹1,10,500",
-    oldPrice: "₹1,30,000",
-    rating: 4.5,
-    image: "https://m.media-amazon.com/images/I/61r1H+N8ZQL._SX679_.jpg",
-    store: "Flipkart"
-  },
-  {
-    title: "Logitech MX Master 3S Advanced Wireless Mouse",
-    price: "₹8,995",
-    rating: 4.8,
-    image: "https://m.media-amazon.com/images/I/61ni3t1ryQL._SX679_.jpg",
-    store: "Amazon",
-    tag: "Lowest Ever"
-  }
-];
+import { fetchSearch } from '../lib/api';
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
+  const category = searchParams.get('category') || 'laptops';
   
   const [localQuery, setLocalQuery] = useState(query);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     window.scrollTo(0, 0);
     setLocalQuery(query);
-  }, [query]);
+    
+    async function loadResults() {
+      if (!query) return;
+      setLoading(true);
+      try {
+        const data = await fetchSearch(query, category);
+        // Map comparison matches to grid items
+        // We take the 'amazon' side as the primary display item for the grid
+        const formatted = (data.all_comparable_matches || []).map(m => {
+          const p = m.amazon || m.flipkart;
+          return {
+            title: p.name,
+            slug: p.slug,
+            price: `₹${p.price?.toLocaleString('en-IN')}`,
+            oldPrice: p.original_price ? `₹${p.original_price.toLocaleString('en-IN')}` : null,
+            rating: p.rating,
+            image: p.image,
+            store: p.website === 'amazon' ? 'Amazon' : 'Flipkart',
+            tag: m.match_type === 'exact' ? 'Best Match' : m.confidence_label
+          };
+        });
+        setProducts(formatted);
+        setTotal(data.all_comparable_total || 0);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadResults();
+  }, [query, category]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (localQuery.trim().length > 0) {
-      navigate('/search?q=' + encodeURIComponent(localQuery.trim()));
+      navigate(`/search?q=${encodeURIComponent(localQuery.trim())}&category=${category}`);
     }
   };
 
@@ -75,7 +75,7 @@ export default function SearchResultsPage() {
                   Results for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">"{query}"</span>
                 </h1>
                 <p className="text-slate-500 text-sm mt-1.5">
-                  Showing {MOCK_PRODUCTS.length} products matching your query
+                  {loading ? 'Searching marketplace...' : `Found ${total} verified matches`}
                 </p>
               </div>
               
@@ -106,7 +106,19 @@ export default function SearchResultsPage() {
             
             {/* Product Grid Area */}
             <div className="flex-1">
-              <ProductGrid products={MOCK_PRODUCTS} />
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <div className="w-10 h-10 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin"></div>
+                  <p className="text-slate-400 font-medium text-sm animate-pulse">Scanning stores...</p>
+                </div>
+              ) : products.length > 0 ? (
+                <ProductGrid products={products} />
+              ) : (
+                <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300">
+                  <h3 className="text-lg font-bold text-slate-800">No matches found</h3>
+                  <p className="text-slate-500 mt-2">Try a different keyword or category.</p>
+                </div>
+              )}
             </div>
           </div>
           
