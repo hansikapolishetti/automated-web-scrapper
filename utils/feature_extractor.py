@@ -256,10 +256,13 @@ def get_gpu(name):
     normalized = normalize_text(name)
 
     patterns = [
-        r'\bNVIDIA\s+GeForce\s+RTX\s?\d{3,4}\b',
-        r'\bNVIDIA\s+GeForce\s+GTX\s?\d{3,4}\b',
-        r'\bRTX\s?\d{3,4}\b',
-        r'\bGTX\s?\d{3,4}\b',
+        r'\bNVIDIA\s+GeForce\s+RTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
+        r'\bNVIDIA\s+GeForce\s+GTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
+        r'\bRTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
+        r'\bGTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
+        r'\bApple\s+M[1-4]\s+(?:Pro|Max|Ultra)?\s*\d+-core\s+GPU\b',
+        r'\bM[1-4]\s+(?:Pro|Max|Ultra)?\s*\d+-core\s+GPU\b',
+        r'\bApple\s+\d+-core\s+GPU\b',
         r'\bMX\s?\d{2,3}\b',
         r'\bArc\s+[A-Z]\d+\b',
         r'\bIntel\s+Arc\b',
@@ -270,6 +273,8 @@ def get_gpu(name):
         r'\bUHD\s+Graphics\b',
         r'\bIntel\s+iGPU\b',
         r'\biGPU\b',
+        r'\bAMD\s+Radeon\s+(?:RX\s+)?\d{4}[SM]?(?:\s+XT)?\b',
+        r'\bRadeon\s+(?:RX\s+)?\d{4}[SM]?(?:\s+XT)?\b',
         r'\bAMD\s+Radeon\s+Graphics\b',
         r'\bAMD\s+Radeon\s+\d{3,4}M\b',
         r'\bAMD\s+Radeon\s+\d{3,4}\b',

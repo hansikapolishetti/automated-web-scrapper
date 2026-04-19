@@ -338,8 +338,6 @@ def score_products(left, right):
             reasons.append("processor_family")
         else:
             return 0, []
-    elif is_known(left_processor) != is_known(right_processor):
-        return 0, []
 
     for field, points in (("ram", 12), ("storage", 12), ("screen_size", 10), ("gpu", 10)):
         left_value = left.get(field)
@@ -347,8 +345,6 @@ def score_products(left, right):
         if is_known(left_value) and is_known(right_value) and normalize_value(left_value) == normalize_value(right_value):
             score += points
             reasons.append(field)
-        elif field in {"screen_size", "gpu"} and is_known(left_value) and is_known(right_value):
-            return 0, []
 
     return score, reasons
 
@@ -566,23 +562,19 @@ def score_spec_match(left, right):
 
     left_ram = left.get("ram")
     right_ram = right.get("ram")
+    if is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) != normalize_value(right_ram):
+        return 0, []
+
     left_storage = left.get("storage")
     right_storage = right.get("storage")
-    if not (
-        is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) == normalize_value(right_ram)
-        and is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) == normalize_value(right_storage)
-    ):
+    if is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) != normalize_value(right_storage):
         return 0, []
 
     left_processor = left.get("processor")
     right_processor = right.get("processor")
-    if not (is_known(left_processor) and is_known(right_processor)):
-        return 0, []
-
-    left_proc_family = processor_family(left_processor)
-    right_proc_family = processor_family(right_processor)
-    if left_proc_family != right_proc_family:
-        return 0, []
+    if is_known(left_processor) and is_known(right_processor):
+        if processor_family(left_processor) != processor_family(right_processor):
+            return 0, []
 
     left_tokens = tokenize_name(left.get("name", ""))
     right_tokens = tokenize_name(right.get("name", ""))
@@ -639,13 +631,9 @@ def score_mobile_spec_match(left, right):
 
     left_processor = left.get("processor")
     right_processor = right.get("processor")
-    if not (is_known(left_processor) and is_known(right_processor)):
-        return 0, []
-
-    left_proc_family = processor_family(left_processor)
-    right_proc_family = processor_family(right_processor)
-    if left_proc_family != right_proc_family:
-        return 0, []
+    if is_known(left_processor) and is_known(right_processor):
+        if processor_family(left_processor) != processor_family(right_processor):
+            return 0, []
 
     score = 20 + 15 + 15 + 18
     reasons = ["brand", "ram", "storage", "processor_family"]
@@ -729,21 +717,17 @@ def score_variant_match(left, right):
     right_ram = right.get("ram")
     left_storage = left.get("storage")
     right_storage = right.get("storage")
-    if not (
-        is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) == normalize_value(right_ram)
-        and is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) == normalize_value(right_storage)
-    ):
+    if is_known(left_ram) and is_known(right_ram) and normalize_value(left_ram) != normalize_value(right_ram):
+        return 0, []
+
+    if is_known(left_storage) and is_known(right_storage) and normalize_value(left_storage) != normalize_value(right_storage):
         return 0, []
 
     left_processor = left.get("processor")
     right_processor = right.get("processor")
-    if not (is_known(left_processor) and is_known(right_processor)):
-        return 0, []
-
-    left_proc_family = processor_family(left_processor)
-    right_proc_family = processor_family(right_processor)
-    if left_proc_family != right_proc_family:
-        return 0, []
+    if is_known(left_processor) and is_known(right_processor):
+        if processor_family(left_processor) != processor_family(right_processor):
+            return 0, []
 
     score = 0
     reasons = ["brand", "ram", "storage", "processor_family"]
@@ -1125,7 +1109,7 @@ def comparison_payload(query=None, limit=20, category="laptops"):
     is_tv_category = normalized_category == "tvs"
 
     projection = {
-        "_id": 0,
+        "_id": 1,
         "name": 1,
         "price": 1,
         "original_price": 1,
@@ -1180,6 +1164,66 @@ def comparison_payload(query=None, limit=20, category="laptops"):
     variant_matches = []
     possible_matches = []
     spec_comparable_matches = []
+    fallback_matches = []
+    
+    # Tracking for 100% coverage
+    amazon_matched_ids = set()
+    flipkart_matched_ids = set()
+    
+    def _get_processor_family(proc_str):
+        if not proc_str or proc_str == "Unknown":
+            return None
+        text = proc_str.lower()
+        if "i3" in text: return "i3"
+        if "i5" in text: return "i5"
+        if "i7" in text: return "i7"
+        if "i9" in text: return "i9"
+        if "ryzen 3" in text: return "ryzen 3"
+        if "ryzen 5" in text: return "ryzen 5"
+        if "ryzen 7" in text: return "ryzen 7"
+        if "ryzen 9" in text: return "ryzen 9"
+        if "m1" in text: return "m1"
+        if "m2" in text: return "m2"
+        if "m3" in text: return "m3"
+        if "celeron" in text: return "celeron"
+        if "pentium" in text: return "pentium"
+        return None
+
+    def _get_fallback_score(anchor, candidate):
+        score = 0
+        
+        # 1. Processor Family (Highest Weight)
+        a_proc = _get_processor_family(anchor.get("processor") or anchor.get("name"))
+        c_proc = _get_processor_family(candidate.get("processor") or candidate.get("name"))
+        if a_proc and c_proc and a_proc == c_proc:
+            score += 50
+            
+        # 2. RAM Proximity
+        try:
+            a_ram = int(re.search(r'(\d+)', anchor.get("ram") or "").group(1))
+            c_ram = int(re.search(r'(\d+)', candidate.get("ram") or "").group(1))
+            if a_ram == c_ram:
+                score += 20
+        except: pass
+        
+        # 3. Storage Proximity
+        try:
+            a_st = int(re.search(r'(\d+)', anchor.get("storage") or "").group(1))
+            c_st = int(re.search(r'(\d+)', candidate.get("storage") or "").group(1))
+            if a_st == c_st:
+                score += 10
+        except: pass
+        
+        # 4. Price Proximity (Lower absolute diff is better)
+        a_price = anchor.get("price") or 0
+        c_price = candidate.get("price") or 0
+        if a_price > 0 and c_price > 0:
+            diff_ratio = abs(a_price - c_price) / a_price
+            if diff_ratio < 0.1: score += 20
+            elif diff_ratio < 0.25: score += 10
+            
+        return score
+
     for amazon_product in amazon_products:
         brand_key = normalize_value(amazon_product.get("brand"))
         if not brand_key:
@@ -1244,6 +1288,8 @@ def comparison_payload(query=None, limit=20, category="laptops"):
                     "match_type": "exact",
                     "confidence_label": "High Confidence",
                 })
+                amazon_matched_ids.add(str(amazon_product.get("_id")))
+                flipkart_matched_ids.add(str(flipkart_product.get("_id")))
                 continue
 
             possible_matches.append({
@@ -1251,6 +1297,8 @@ def comparison_payload(query=None, limit=20, category="laptops"):
                 "match_type": "possible",
                 "confidence_label": "Close Match",
             })
+            amazon_matched_ids.add(str(amazon_product.get("_id")))
+            flipkart_matched_ids.add(str(flipkart_product.get("_id")))
             continue
 
         if variant_result:
@@ -1280,6 +1328,8 @@ def comparison_payload(query=None, limit=20, category="laptops"):
                 "match_type": "variant",
                 "confidence_label": "Variant Match",
             })
+            amazon_matched_ids.add(str(amazon_product.get("_id")))
+            flipkart_matched_ids.add(str(matched.get("_id")))
             continue
 
         if spec_result:
@@ -1309,13 +1359,17 @@ def comparison_payload(query=None, limit=20, category="laptops"):
                 "match_type": "similar_specs",
                 "confidence_label": "Similar Specs",
             })
+            amazon_matched_ids.add(str(amazon_product.get("_id")))
+            flipkart_matched_ids.add(str(matched.get("_id")))
 
     exact_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     variant_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     possible_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     spec_comparable_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
+    
     all_comparable_matches = [*exact_matches, *variant_matches, *spec_comparable_matches]
     all_comparable_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
+    
     best_value_matches = sorted(
         [
             item
@@ -1327,6 +1381,96 @@ def comparison_payload(query=None, limit=20, category="laptops"):
             -item["score"],
         ),
     )
+
+    # === FALLBACK LOGIC AMZ -> FK ===
+    amazon_orphans = [p for p in amazon_products if str(p.get("_id")) not in amazon_matched_ids]
+    
+    # Pre-fetch some global Flipkart items for the "Rare Case" fallback
+    global_flipkart = []
+    if amazon_orphans:
+        global_flipkart = list(collection.find(
+            {"website": "flipkart", "category": "laptops"},
+            projection
+        ).limit(10))
+
+    for amazon_product in amazon_orphans:
+        brand_key = normalize_value(amazon_product.get("brand"))
+        candidates = flipkart_by_brand.get(brand_key, [])
+        if not candidates:
+            # Fallback to current search results
+            candidates = flipkart_products[:10]
+        if not candidates:
+            # Fallback to global database
+            candidates = global_flipkart
+
+        ranked = []
+        for c in candidates:
+            score = _get_fallback_score(amazon_product, c)
+            price_diff = abs((amazon_product.get("price") or 0) - (c.get("price") or 0))
+            ranked.append((score, price_diff, c))
+            
+        ranked.sort(key=lambda x: (-x[0], x[1]))
+        
+        for score, p_diff, matched in ranked[:3]:
+            fallback_matches.append({
+                "score": score,
+                "match_reasons": ["fallback"],
+                "amazon": amazon_product,
+                "flipkart": matched,
+                "differences": (
+                    build_differences(amazon_product, matched) 
+                    if not is_mobile_category and not is_tv_category 
+                    else {}
+                ),
+                "price_difference": p_diff,
+                "cheaper_site": "amazon" if (amazon_product.get("price") or 0) < (matched.get("price") or 0) else "flipkart",
+                "match_type": "fallback",
+                "confidence_label": "Recommended Alternatives",
+            })
+
+    # === FALLBACK LOGIC FK -> AMZ ===
+    flipkart_orphans = [p for p in flipkart_products if str(p.get("_id")) not in flipkart_matched_ids]
+    
+    global_amazon = []
+    if flipkart_orphans:
+        global_amazon = list(collection.find(
+            {"website": "amazon", "category": "laptops"},
+            projection
+        ).limit(10))
+
+    amazon_by_brand = build_candidate_groups(amazon_products)
+    for flipkart_product in flipkart_orphans:
+        brand_key = normalize_value(flipkart_product.get("brand"))
+        candidates = amazon_by_brand.get(brand_key, [])
+        if not candidates:
+            candidates = amazon_products[:10]
+        if not candidates:
+            candidates = global_amazon
+
+        ranked = []
+        for c in candidates:
+            score = _get_fallback_score(flipkart_product, c)
+            price_diff = abs((flipkart_product.get("price") or 0) - (c.get("price") or 0))
+            ranked.append((score, price_diff, c))
+            
+        ranked.sort(key=lambda x: (-x[0], x[1]))
+        
+        for score, p_diff, matched in ranked[:3]:
+            fallback_matches.append({
+                "score": score,
+                "match_reasons": ["fallback"],
+                "amazon": matched,
+                "flipkart": flipkart_product,
+                "differences": (
+                    build_differences(matched, flipkart_product) 
+                    if not is_mobile_category and not is_tv_category 
+                    else {}
+                ),
+                "price_difference": p_diff,
+                "cheaper_site": "amazon" if (matched.get("price") or 0) < (flipkart_product.get("price") or 0) else "flipkart",
+                "match_type": "fallback",
+                "confidence_label": "Recommended Alternatives",
+            })
     return {
         "query": query or "",
         "category": normalized_category,
@@ -1335,6 +1479,7 @@ def comparison_payload(query=None, limit=20, category="laptops"):
         "variant_total": len(variant_matches),
         "possible_total": len(possible_matches),
         "spec_comparable_total": len(spec_comparable_matches),
+        "fallback_total": len(fallback_matches),
         "all_comparable_total": len(all_comparable_matches),
         "best_value_total": len(best_value_matches),
         "high_confidence_matches": exact_matches[:limit],
@@ -1342,6 +1487,7 @@ def comparison_payload(query=None, limit=20, category="laptops"):
         "variant_matches": variant_matches[:limit],
         "possible_matches": possible_matches[:limit],
         "spec_comparable_matches": spec_comparable_matches[:limit],
+        "fallback_matches": fallback_matches[:limit],
         "all_comparable_matches": all_comparable_matches[:limit],
         "best_value_matches": best_value_matches[:limit],
     }
