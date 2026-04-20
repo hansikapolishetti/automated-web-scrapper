@@ -91,6 +91,8 @@ def normalize_text(name):
         "\u2022": " ",
         "\u00a0": " ",
         "\ufffd": " ",
+        "®": "",
+        "™": "",
         "InteI": "Intel",
         "AINow": "AI Now",
         "NVME": "NVMe",

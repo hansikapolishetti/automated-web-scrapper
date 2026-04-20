@@ -220,6 +220,156 @@ def handle_search(params):
     return 200, serialize(result)
 
 
+def handle_api_compare(params):
+    slug = (params.get("id", [""])[0] or "").strip()
+    if not slug:
+        return 400, {"error": "Missing product id (slug)"}
+
+    # 1. Fetch anchor product
+    product_data = None
+    category = None
+    anchor_docs = []
+    
+    for cat in CATEGORIES:
+        col = get_collection(cat)
+        docs = list(col.find({"slug": slug}))
+        if docs:
+            category = cat
+            anchor_docs = docs
+            _, product_data = handle_product_detail(slug)
+            break
+
+    # Case 3: Product Not Found
+    if not product_data:
+        # Return empty list for matches but maybe some global fallbacks
+        results = comparison_payload(query="", limit=5, category="laptops")
+        return 200, {
+            "product": None,
+            "exact_matches": [],
+            "variant_matches": [],
+            "spec_comparable_matches": [],
+            "fallback_matches": serialize(results.get("fallback_matches", []))[:5]
+        }
+
+    # 2. Get full comparison payload for the category
+    results = comparison_payload(category=category, limit=9999)
+
+    anchor_ids = {str(d.get("_id", "")) for d in anchor_docs}
+
+    def _id(p): return str(p.get("_id", "") or p.get("id", ""))
+
+    def _filter_matches(match_list):
+        seen_counterpart = set()
+        out = []
+        for m in match_list:
+            amz = m.get("amazon", {}) or {}
+            fk  = m.get("flipkart", {}) or {}
+            amz_id = _id(amz)
+            fk_id  = _id(fk)
+
+            anchor_is_amz = (amz_id in anchor_ids) or (amz.get("slug") == slug)
+            anchor_is_fk  = (fk_id in anchor_ids) or (fk.get("slug") == slug)
+
+            # Keep only if anchor is in this pair
+            if not anchor_is_amz and not anchor_is_fk:
+                continue
+
+            # Counterpart is the other side
+            counterpart = fk if anchor_is_amz else amz
+            c_id = _id(counterpart)
+
+            if not c_id:
+                continue
+
+            # Cross-site rule: counterpart must be from a diff website
+            anchor_website = amz.get("website") if anchor_is_amz else fk.get("website")
+            if counterpart.get("website") == anchor_website:
+                continue
+
+            # Skip same product itself
+            if (c_id in anchor_ids) or (counterpart.get("slug") == slug):
+                continue
+
+            if c_id in seen_counterpart:
+                continue
+
+            seen_counterpart.add(c_id)
+            out.append(m)
+        return out
+
+    exact_matches          = _filter_matches(results.get("exact_matches", []))
+    variant_matches        = _filter_matches(results.get("variant_matches", []))
+    spec_comparable_matches = _filter_matches(results.get("spec_comparable_matches", []))
+    fallback_matches       = _filter_matches(results.get("fallback_matches", []))
+
+    # ENFORCE AT LEAST ONE FALLBACK
+    if not (exact_matches or variant_matches or spec_comparable_matches or fallback_matches):
+        col = get_collection(category)
+        anchor_brand = product_data.get("brand") if product_data else None
+        anchor_website = anchor_docs[0].get("website") if anchor_docs else None
+        target_website = "flipkart" if anchor_website == "amazon" else "amazon"
+        
+        fallback_query = {"website": target_website}
+        if anchor_brand:
+            fallback_query["brand"] = anchor_brand
+        
+        fbs_pool = list(col.find(fallback_query).limit(50))
+        if not fbs_pool:
+            fbs_pool = list(col.find({"website": target_website}).limit(50))
+            
+        from utils.comparison import get_fallback_score
+        is_mob = category.lower() == "mobiles"
+        is_tv = category.lower() == "tvs"
+
+        ranked_fbs = []
+        for f in fbs_pool:
+            sc = get_fallback_score(product_data, f, is_mobile_category=is_mob, is_tv_category=is_tv)
+            ranked_fbs.append((sc, f))
+            
+        ranked_fbs.sort(key=lambda x: x[0], reverse=True)
+        
+        seen_names = set()
+        final_fbs = []
+        for _, f in ranked_fbs:
+            nm = (f.get("name") or "").strip().lower()
+            if nm in seen_names:
+                continue
+            seen_names.add(nm)
+            final_fbs.append(f)
+            if len(final_fbs) >= 3:
+                break
+            
+        # Manually create fallback match objects
+        for f in final_fbs:
+            amz_side = anchor_docs[0] if anchor_website == "amazon" else f
+            fk_side = f if anchor_website == "amazon" else anchor_docs[0]
+            
+            fallback_matches.append({
+                "score": 10,
+                "match_reasons": ["fallback"],
+                "amazon": amz_side,
+                "flipkart": fk_side,
+                "cheaper_site": "none",
+                "price_difference": 0
+            })
+
+    # Logging for verification (can be removed later)
+    print(f"[DEBUG] Comparison for {slug}:")
+    print(f"  - Exact: {len(exact_matches)}")
+    print(f"  - Variants: {len(variant_matches)}")
+    print(f"  - Spec Comparable: {len(spec_comparable_matches)}")
+    print(f"  - Fallback: {len(fallback_matches)}")
+
+    # 3. Combine and return serialized data
+    return 200, {
+        "product": product_data,
+        "exact_matches": serialize(exact_matches),
+        "variant_matches": serialize(variant_matches),
+        "spec_comparable_matches": serialize(spec_comparable_matches),
+        "fallback_matches": serialize(fallback_matches)
+    }
+
+
 def handle_compare(params):
     query = (params.get("query", [""])[0] or "").strip()
     category = (params.get("category", ["laptops"])[0] or "laptops").strip().lower()
@@ -293,6 +443,9 @@ class Handler(BaseHTTPRequestHandler):
 
             elif path == "/api/search":
                 status, data = handle_search(params)
+
+            elif path == "/api/compare":
+                status, data = handle_api_compare(params)
 
             elif path == "/compare":
                 status, data = handle_compare(params)

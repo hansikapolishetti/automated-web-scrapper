@@ -1,0 +1,85 @@
+/* Premium Product Comparison Styles */
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.1);
+}
+
+.tab-transition {
+  transition: all 0.3s ease;
+}
+
+.price-tag {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.diff-badge {
+  @apply text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full;
+}
+
+.diff-badge-better {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.diff-badge-worse {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.cheaper-overlay {
+  background: linear-gradient(to right, #10b981, #34d399);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 99px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+  z-index: 10;
+}
+
+.spec-diff-item {
+  @apply flex items-baseline justify-between py-1 border-b border-slate-50 last:border-0;
+}
+
+.premium-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.premium-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.premium-scroll::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+.premium-scroll::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

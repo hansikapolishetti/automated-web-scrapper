@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function ProductCard({ title, price, rating, image, store, tag, oldPrice }) {
+export default function ProductCard({ title, price, rating, image, store, tag, oldPrice, slug }) {
   const navigate = useNavigate();
 
   const storeColors = {
@@ -18,11 +18,9 @@ export default function ProductCard({ title, price, rating, image, store, tag, o
   const tagClass = tagColors[tag] || 'bg-slate-100 text-slate-600 border-slate-200';
   const badgeClass = storeColors[store] || 'text-slate-600 bg-slate-50 border-slate-200';
 
-  const productSlug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, '-'));
-
   return (
     <div 
-      onClick={() => navigate(`/product/${productSlug}`)}
+      onClick={() => navigate(`/product/${slug}`)}
       className="group flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all duration-300 overflow-hidden cursor-pointer h-full"
     >
       <div className="relative aspect-square w-full p-6 bg-slate-50/50 flex items-center justify-center overflow-hidden">
