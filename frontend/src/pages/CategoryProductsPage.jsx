@@ -22,18 +22,20 @@ export default function CategoryProductsPage() {
   const [brands, setBrands] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefetching, setIsRefetching] = useState(false);
   
+  // Effect 1: fires ONLY when category changes — fetches products + brands, resets filters
   useEffect(() => {
-    window.scrollTo(0, 0);
-    
-    async function loadData() {
-      setLoading(true);
+    setSelectedBrands([]);
+    setLoading(true);
+
+    async function loadInitial() {
       try {
         const [prodData, brandData] = await Promise.all([
-          fetchProducts({ category: categoryName, brands: selectedBrands, limit: 24 }),
+          fetchProducts({ category: categoryName, brands: [], limit: 24 }),
           fetchBrands(categoryName)
         ]);
-        
+
         const mappedProducts = (prodData.products || []).map(p => ({
           ...p,
           title: p.name,
@@ -41,18 +43,42 @@ export default function CategoryProductsPage() {
           oldPrice: formatPrice(p.original_price),
           store: p.website ? p.website.charAt(0).toUpperCase() + p.website.slice(1) : 'Unknown'
         }));
-        
+
         setProducts(mappedProducts);
         setBrands(brandData || []);
       } catch (err) {
-        console.error("Failed to load category data:", err);
+        console.error('Failed to load category data:', err);
       } finally {
         setLoading(false);
       }
     }
 
-    loadData();
-  }, [categoryName, selectedBrands]);
+    loadInitial();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryName]);
+
+  // Effect 2: fires ONLY when brand filter changes — refetches products only (no brand list)
+  useEffect(() => {
+    // Skip on initial mount (loading handled by Effect 1)
+    if (loading) return;
+
+    setIsRefetching(true);
+
+    fetchProducts({ category: categoryName, brands: selectedBrands, limit: 24 })
+      .then(prodData => {
+        const mappedProducts = (prodData.products || []).map(p => ({
+          ...p,
+          title: p.name,
+          price: formatPrice(p.price),
+          oldPrice: formatPrice(p.original_price),
+          store: p.website ? p.website.charAt(0).toUpperCase() + p.website.slice(1) : 'Unknown'
+        }));
+        setProducts(mappedProducts);
+      })
+      .catch(err => console.error('Failed to filter products:', err))
+      .finally(() => setIsRefetching(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBrands]);
 
   const handleBrandToggle = (brand) => {
     setSelectedBrands(prev => 
@@ -75,6 +101,13 @@ export default function CategoryProductsPage() {
     <div className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
       <Navbar forceDarkText={true} />
       
+      {/* Refetching Indicator Bar */}
+      {isRefetching && (
+        <div className="fixed top-0 left-0 w-full h-1 bg-blue-500/20 z-[100] overflow-hidden">
+          <div className="h-full bg-blue-600 animate-[loading_1s_infinite_ease-in-out]"></div>
+        </div>
+      )}
+
       <main className="pt-28 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           

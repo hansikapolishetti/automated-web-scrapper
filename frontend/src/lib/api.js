@@ -39,6 +39,10 @@ export function fetchPrices(slug) {
   return fetchJson(`/products/${encodeURIComponent(slug)}/prices`);
 }
 
+export function fetchCompareById(slug) {
+  return fetchJson(`/compare?id=${encodeURIComponent(slug)}`);
+}
+
 export function fetchSimilar(slug, category = 'laptops') {
   return fetchJson(`/products/${encodeURIComponent(slug)}/similar?category=${category}`);
 }
