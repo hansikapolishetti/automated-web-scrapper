@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import FilterSidebar from '../components/filters/FilterSidebar';
+
 import ProductGrid from '../components/products/ProductGrid';
 import { fetchSearch } from '../lib/api';
 
@@ -25,9 +25,30 @@ export default function SearchResultsPage() {
       setLoading(true);
       try {
         const data = await fetchSearch(query, category);
-        // Map comparison matches to grid items
-        // We take the 'amazon' side as the primary display item for the grid
-        const formatted = (data.all_comparable_matches || []).map(m => {
+        const matches = data.all_comparable_matches || [];
+
+        // Pre-compute price thresholds across the result set
+        const prices = matches
+          .map(m => (m.amazon || m.flipkart)?.price)
+          .filter(Boolean)
+          .sort((a, b) => a - b);
+        const budgetCutoff  = prices[Math.floor(prices.length * 0.30)] ?? Infinity; // bottom 30%
+        const premiumFloor  = prices[Math.floor(prices.length * 0.85)] ?? Infinity; // top 15%
+
+        const getTag = (p) => {
+          const discount = p.original_price && p.price
+            ? ((p.original_price - p.price) / p.original_price) * 100
+            : 0;
+
+          if (discount >= 15)              return 'Great Deal';
+          if (p.rating >= 4.2)             return 'Top Rated';
+          if ((p.review_count ?? 0) > 500) return 'Popular';
+          if (p.price >= premiumFloor)     return 'Premium';
+          if (p.price <= budgetCutoff)     return 'Budget Pick';
+          return null;
+        };
+
+        const formatted = matches.map(m => {
           const p = m.amazon || m.flipkart;
           return {
             title: p.name,
@@ -37,11 +58,11 @@ export default function SearchResultsPage() {
             rating: p.rating,
             image: p.image,
             store: p.website === 'amazon' ? 'Amazon' : 'Flipkart',
-            tag: m.match_type === 'exact' ? 'Best Match' : m.confidence_label
+            tag: getTag(p),
           };
         });
         setProducts(formatted);
-        setTotal(data.all_comparable_total || 0);
+        setTotal(data.all_comparable_total || formatted.length);
       } catch (err) {
         console.error('Search failed:', err);
       } finally {
@@ -98,28 +119,21 @@ export default function SearchResultsPage() {
             </div>
           </div>
           
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Sidebar */}
-            <div className="w-full lg:w-[280px] flex-shrink-0">
-              <FilterSidebar />
-            </div>
-            
+          <div>
             {/* Product Grid Area */}
-            <div className="flex-1">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-4">
-                  <div className="w-10 h-10 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin"></div>
-                  <p className="text-slate-400 font-medium text-sm animate-pulse">Scanning stores...</p>
-                </div>
-              ) : products.length > 0 ? (
-                <ProductGrid products={products} />
-              ) : (
-                <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300">
-                  <h3 className="text-lg font-bold text-slate-800">No matches found</h3>
-                  <p className="text-slate-500 mt-2">Try a different keyword or category.</p>
-                </div>
-              )}
-            </div>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="w-10 h-10 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin"></div>
+                <p className="text-slate-400 font-medium text-sm animate-pulse">Scanning stores...</p>
+              </div>
+            ) : products.length > 0 ? (
+              <ProductGrid products={products} />
+            ) : (
+              <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300">
+                <h3 className="text-lg font-bold text-slate-800">No matches found</h3>
+                <p className="text-slate-500 mt-2">Try a different keyword or category.</p>
+              </div>
+            )}
           </div>
           
         </div>

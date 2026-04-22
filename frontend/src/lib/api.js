@@ -54,6 +54,18 @@ export function fetchSearch(query, category = 'laptops') {
   return fetchJson(`/search?${searchParams.toString()}`);
 }
 
+export function fetchSearchSuggestions(query) {
+  const searchParams = new URLSearchParams();
+  searchParams.set('q', query);
+  return fetchJson(`/search/suggestions?${searchParams.toString()}`);
+}
+
+export function fetchSearchByLink(url) {
+  const searchParams = new URLSearchParams();
+  searchParams.set('url', url);
+  return fetchJson(`/search/by-link?${searchParams.toString()}`);
+}
+
 // Compatibility layer for older pages if needed
 export function fetchCompare({ query = '', category = 'laptops', limit = 12 } = {}) {
   const searchParams = new URLSearchParams();

@@ -184,7 +184,19 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-// 6. GET /api/search?q=query - Search (uses Python logic)
+// 6. GET /api/brands?category=... - Brand list for a category
+app.get('/api/brands', async (req, res) => {
+  try {
+    const category = (req.query.category || 'laptops').toLowerCase().trim();
+    const collection = getCollection(category);
+    const brands = (await collection.distinct('brand')).filter(Boolean).sort();
+    res.json(brands);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch brands', detail: error.message });
+  }
+});
+
+// 7. GET /api/search?q=query - Search (uses Python logic)
 app.get('/api/search', async (req, res) => {
   try {
     const query = req.query.q || '';
@@ -195,6 +207,44 @@ app.get('/api/search', async (req, res) => {
     res.json(results);
   } catch (error) {
     res.status(500).json({ error: 'Search failed', detail: error.message });
+  }
+});
+
+// 8. GET /api/search/suggestions?q=... - Live autocomplete suggestions
+app.get('/api/search/suggestions', async (req, res) => {
+  try {
+    const query = (req.query.q || '').trim();
+    if (!query || query.length < 2) return res.json([]);
+
+    const categories = ['laptops', 'mobiles', 'tvs', 'audio'];
+    const regexQuery = { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    const mongoFilter = { $or: [{ name: regexQuery }, { brand: regexQuery }] };
+    const projection = { name: 1, brand: 1, image: 1, slug: 1, price: 1, category: 1, website: 1 };
+
+    const suggestions = [];
+    const seenSlugs = new Set();
+
+    for (const cat of categories) {
+      const col = getCollection(cat);
+      const matches = await col.find(mongoFilter, { projection }).limit(5).toArray();
+      for (const m of matches) {
+        const slug = m.slug || m.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        if (!seenSlugs.has(slug)) {
+          m.slug = slug;
+          m.category = cat;
+          // Strip _id for clean JSON
+          delete m._id;
+          suggestions.push(m);
+          seenSlugs.add(slug);
+        }
+        if (suggestions.length >= 10) break;
+      }
+      if (suggestions.length >= 10) break;
+    }
+
+    res.json(suggestions);
+  } catch (error) {
+    res.status(500).json({ error: 'Suggestions failed', detail: error.message });
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import FilterSidebar from '../components/filters/FilterSidebar';
+
 import ProductGrid from '../components/products/ProductGrid';
 import { fetchProducts } from '../lib/api';
 import { formatCountLabel, normalizeProductsForGrid } from '../lib/productAdapters';
@@ -96,12 +96,7 @@ export default function SearchResultsPageDynamic() {
             </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8">
-            <div className="w-full lg:w-[280px] flex-shrink-0">
-              <FilterSidebar />
-            </div>
-
-            <div className="flex-1">
+          <div>
               {error ? (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
                   {error}
@@ -113,7 +108,6 @@ export default function SearchResultsPageDynamic() {
               ) : (
                 <ProductGrid products={products} />
               )}
-            </div>
           </div>
         </div>
       </main>
