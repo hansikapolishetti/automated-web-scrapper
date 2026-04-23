@@ -67,9 +67,7 @@ MODEL_CODE_BLACKLIST = {
     "120U",
     "1305U",
     "1315U",
-    "1334U",
     "1335U",
-    "13620H",
     "7435HS",
     "7730U",
     "8840H",
@@ -255,127 +253,64 @@ def get_screen_size(name):
 
 
 def get_gpu(name):
-    normalized = normalize_text(name)
+    normalized = normalize_text(name).lower()
 
-    patterns = [
-        r'\bNVIDIA\s+GeForce\s+RTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
-        r'\bNVIDIA\s+GeForce\s+GTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
-        r'\bRTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
-        r'\bGTX\s?\d{3,4}(?:\s*(?:Ti|Super|Max-Q|Max-P))?\b',
-        r'\bApple\s+M[1-4]\s+(?:Pro|Max|Ultra)?\s*\d+-core\s+GPU\b',
-        r'\bM[1-4]\s+(?:Pro|Max|Ultra)?\s*\d+-core\s+GPU\b',
-        r'\bApple\s+\d+-core\s+GPU\b',
-        r'\bMX\s?\d{2,3}\b',
-        r'\bArc\s+[A-Z]\d+\b',
-        r'\bIntel\s+Arc\b',
-        r'\bIntel\s+Iris\s+Xe\b',
-        r'\bIris\s+Xe\b',
-        r'\bIntel\s+Graphics\b',
-        r'\bIntel\s+UHD(?:\s+Graphics)?\b',
-        r'\bUHD\s+Graphics\b',
-        r'\bIntel\s+iGPU\b',
-        r'\biGPU\b',
-        r'\bAMD\s+Radeon\s+(?:RX\s+)?\d{4}[SM]?(?:\s+XT)?\b',
-        r'\bRadeon\s+(?:RX\s+)?\d{4}[SM]?(?:\s+XT)?\b',
-        r'\bAMD\s+Radeon\s+Graphics\b',
-        r'\bAMD\s+Radeon\s+\d{3,4}M\b',
-        r'\bAMD\s+Radeon\s+\d{3,4}\b',
-        r'\bRadeon\s+\d{3,4}M\b',
-        r'\bRadeon\s+\d{3,4}\b',
-        r'\bAMD\s+Radeon\s+\d+[A-Z]*M?\b',
-        r'\bAMD\s+Radeon\b',
-        r'\bAMD\s+Radeon\s+iGPU\b',
-        r'\bRadeon\s+\d+[A-Z]*M?\b',
-        r'\bRadeon\s+Graphics\b',
-        r'\bIntegrated\s+Graphics\b',
-        r'\bShared\s+Graphics\b',
-        r'\bUMA\s+Graphics\b',
-    ]
+    if "rtx" in normalized:
+        return "RTX"
+    if "gtx" in normalized:
+        return "GTX"
+    if "radeon" in normalized:
+        return "AMD Radeon"
+    if "iris xe" in normalized:
+        return "Intel Iris Xe"
 
-    for pattern in patterns:
-        match = re.search(pattern, normalized, re.IGNORECASE)
-        if match:
-            return " ".join(match.group().split())
+    return "Unknown"
 
-    lowered = normalized.lower()
-    if "intel" in lowered and "graphics" in lowered:
-        return "Intel Graphics"
-    if "radeon" in lowered:
-        return "AMD Radeon Graphics"
 
-    return UNKNOWN_GPU
+SERIES_KEYWORDS = [
+    "v14", "e14", "ideapad", "thinkpad", "vivobook",
+    "inspiron", "pavilion", "victus", "loq"
+]
 
+
+def is_valid_model_code(code):
+    if not code:
+        return False
+
+    code = code.strip()
+
+    # Must contain both letters and digits
+    has_letter = any(c.isalpha() for c in code)
+    has_digit = any(c.isdigit() for c in code)
+
+    if not (has_letter and has_digit):
+        return False
+
+    # Reject known series names explicitly
+    if code.lower() in SERIES_KEYWORDS:
+        return False
+
+    # Reject very short generic codes (like "i3", "i5")
+    if len(code) <= 3:
+        return False
+
+    upper_code = code.upper()
+    if upper_code in MODEL_CODE_BLACKLIST:
+        return False
+        
+    if upper_code.startswith("ITM") or upper_code.startswith("COM"):
+        return False
+
+    return True
 
 def get_model_code(name):
-    normalized = normalize_text(name)
+    tokens = name.split()
 
-    priority_patterns = [
-        r'\b[A-Z]{1,4}\d{2,6}[A-Z]{0,4}-[A-Z0-9]{2,}\b',
-        r'\b[A-Z]{2,}\d{2,}[A-Z0-9]*-[A-Z0-9]{2,}\b',
-        r'\b[a-z]{2}\d{4}[a-z]{2}\b',
-    ]
+    for token in tokens:
+        cleaned = token.strip(",()")
 
-    for pattern in priority_patterns:
-        matches = re.findall(pattern, normalized, re.IGNORECASE)
-        for match in matches:
-            candidate = match.upper().strip(" ,.)(")
-            if (
-                len(candidate) <= 32
-                and "ITM" not in candidate
-                and candidate not in MODEL_CODE_BLACKLIST
-                and not candidate.startswith("ITM")
-            ):
-                return candidate
-
-    family_patterns = [
-        r'\b[A-Z]{1,4}\d{2,6}[A-Z]{0,4}\b',
-        r'\b[A-Z]{1,4}\d{1,4}[A-Z]?\s+G\d{1,2}\b',
-        r'\b[A-Z]{1,4}\d{1,4}[A-Z]?(?:\s*-\s*[A-Z0-9]{1,6})\b',
-    ]
-    for pattern in family_patterns:
-        matches = re.findall(pattern, normalized, re.IGNORECASE)
-        for match in matches:
-            candidate = re.sub(r"\s+", " ", match.upper()).strip(" ,.)(")
-            if (
-                len(candidate) <= 24
-                and candidate not in MODEL_CODE_BLACKLIST
-                and not candidate.startswith("ITM")
-                and not candidate.startswith("COM")
-                and any(char.isdigit() for char in candidate)
-                and any(char.isalpha() for char in candidate)
-                and not any(stopword in candidate for stopword in MODEL_CODE_STOPWORDS)
-                and ("-" in candidate or " G" in candidate or len(candidate) <= 10)
-            ):
-                return candidate
-
-    candidates = re.findall(r'\b[A-Z0-9][A-Z0-9-]{4,}\b', normalized.upper())
-    filtered = []
-    for candidate in candidates:
-        if len(candidate) > 32:
-            continue
-        if "-" not in candidate and len(candidate) > 16:
-            continue
-        if candidate.count("-") > 2:
-            continue
-        if not any(char.isdigit() for char in candidate):
-            continue
-        if not any(char.isalpha() for char in candidate):
-            continue
-        if re.fullmatch(r'[A-Z]{6,}\d{8,}', candidate):
-            continue
-        if any(stopword in candidate for stopword in MODEL_CODE_STOPWORDS):
-            continue
-        if candidate in MODEL_CODE_BLACKLIST:
-            continue
-        if candidate.startswith("ITM"):
-            continue
-        if candidate.startswith("COM"):
-            continue
-        filtered.append(candidate.strip(" ,.)("))
-
-    filtered.sort(key=lambda value: (value.count("-") == 0, -len(value)))
-    if filtered:
-        return filtered[0]
+        if is_valid_model_code(cleaned):
+            return cleaned.upper()
 
     return UNKNOWN_MODEL_CODE
 

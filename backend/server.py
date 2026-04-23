@@ -382,6 +382,99 @@ def handle_compare(params):
     return 200, serialize(result)
 
 
+def handle_search_suggestions(params):
+    query = (params.get("q", [""])[0] or "").strip()
+    if not query or len(query) < 2:
+        return 200, []
+
+    suggestions = []
+    seen_slugs = set()
+    
+    regex_query = {"$regex": re.escape(query), "$options": "i"}
+    mongo_filter = {"$or": [{"name": regex_query}, {"brand": regex_query}]}
+    projection = {
+        "name": 1, 
+        "brand": 1, 
+        "image": 1, 
+        "slug": 1, 
+        "price": 1, 
+        "category": 1, 
+        "website": 1
+    }
+
+    for cat in CATEGORIES:
+        col = get_collection(cat)
+        # Fetch up to 5 per category to ensure variety
+        matches = list(col.find(mongo_filter, projection).limit(5))
+        for m in matches:
+            # Fallback for slug if missing
+            slug = m.get("slug") or _generate_slug(m.get("name", ""))
+            if slug not in seen_slugs:
+                m["slug"] = slug
+                m["category"] = cat # ensure category is accurate
+                suggestions.append(m)
+                seen_slugs.add(slug)
+            if len(suggestions) >= 10:
+                break
+        if len(suggestions) >= 10:
+            break
+
+    return 200, serialize(suggestions)
+
+
+def handle_search_by_link(params):
+    """Resolve an Amazon/Flipkart product URL to a product in the DB."""
+    url = (params.get("url", [""])[0] or "").strip()
+    if not url:
+        return 400, {"error": "Missing url parameter"}
+
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    path_str = parsed.path
+    qs = parse_qs(parsed.query)
+
+    # ── Amazon: extract ASIN from /dp/<ASIN> or /gp/product/<ASIN>
+    asin = None
+    if "amazon" in host:
+        m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", path_str, re.IGNORECASE)
+        if m:
+            asin = m.group(1).upper()
+        else:
+            # fallback: ?asin= or ?ASIN=
+            asin = (qs.get("asin", qs.get("ASIN", [""]))[0] or "").strip().upper() or None
+
+    # ── Flipkart: extract pid from ?pid=
+    fk_pid = None
+    if "flipkart" in host:
+        fk_pid = (qs.get("pid", [""])[0] or "").strip() or None
+
+    if not asin and not fk_pid:
+        return 404, {"error": "Could not extract product ID from URL", "url": url}
+
+    # ── Search all categories for a link containing the ID
+    for cat in CATEGORIES:
+        col = get_collection(cat)
+        if asin:
+            doc = col.find_one({"link": {"$regex": re.escape(asin), "$options": "i"}})
+        else:
+            doc = col.find_one({"link": {"$regex": re.escape(fk_pid), "$options": "i"}})
+
+        if doc:
+            slug = doc.get("slug") or _generate_slug(doc.get("name", ""))
+            return 200, {
+                "found": True,
+                "slug": slug,
+                "name": doc.get("name"),
+                "category": cat,
+                "website": doc.get("website"),
+                "price": doc.get("price"),
+                "image": doc.get("image"),
+            }
+
+    return 404, {"found": False, "error": "Product not found in database", "id": asin or fk_pid}
+
+
+
 # ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
@@ -443,6 +536,12 @@ class Handler(BaseHTTPRequestHandler):
 
             elif path == "/api/search":
                 status, data = handle_search(params)
+
+            elif path == "/api/search/by-link":
+                status, data = handle_search_by_link(params)
+
+            elif path == "/api/search/suggestions":
+                status, data = handle_search_suggestions(params)
 
             elif path == "/api/compare":
                 status, data = handle_api_compare(params)

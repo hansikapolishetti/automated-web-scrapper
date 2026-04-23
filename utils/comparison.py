@@ -3,10 +3,14 @@ from collections import defaultdict
 
 from database.db import get_collection
 from utils.feature_extractor import normalize_text
+from utils.classification.router import classify_product
+from utils.classification.helpers import (
+    normalize_value, normalized_model_code, processor_family, is_known, UNKNOWN_VALUES
+)
 
 
-UNKNOWN_VALUES = {"", None, "Unknown", "Unavailable"}
 NOISE_TOKENS = {
+
     "laptop",
     "laptops",
     "notebook",
@@ -85,30 +89,15 @@ TV_NOISE_TOKENS = {
 }
 
 
-def is_known(value):
-    return value not in UNKNOWN_VALUES
-
-
-def normalize_value(value):
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return normalize_text(value).lower()
-    return str(value).strip().lower()
-
-
 def comparable_name(name):
+
     cleaned = normalize_value(name)
     cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
     return " ".join(token for token in cleaned.split() if token not in NOISE_TOKENS)
 
 
-def normalized_model_code(value):
-    code = normalize_value(value).replace(" ", "")
-    return code
-
-
 def model_code_prefix(value):
+
     code = normalized_model_code(value)
     if not code:
         return ""
@@ -218,46 +207,8 @@ def tokenize_tv_name(name):
     }
 
 
-def processor_family(processor):
-    text = normalize_value(processor)
-    families = [
-        "core ultra",
-        "core i9",
-        "core i7",
-        "core i5",
-        "core i3",
-        "core 9",
-        "core 7",
-        "core 5",
-        "core 3",
-        "ryzen ai 9",
-        "ryzen ai 7",
-        "ryzen ai 5",
-        "ryzen 9",
-        "ryzen 7",
-        "ryzen 5",
-        "ryzen 3",
-        "celeron",
-        "pentium",
-        "athlon",
-        "snapdragon",
-        "kompanio",
-        "helio",
-        "xeon",
-        "m4",
-        "m3",
-        "m2",
-        "m1",
-    ]
-
-    for family in families:
-        if family in text:
-            return family
-
-    return text
-
-
 def jaccard_similarity(left, right):
+
     if not left or not right:
         return 0.0
     intersection = len(left & right)
@@ -1286,183 +1237,103 @@ def comparison_payload(query=None, limit=20, category="laptops"):
     flipkart_products = [product for product in products if product.get("website") == "flipkart" and normalize_value(product.get("brand"))]
     flipkart_by_brand = build_candidate_groups(flipkart_products)
 
+    from utils.classification.router import classify_product
+
     exact_matches = []
     variant_matches = []
     possible_matches = []
     spec_comparable_matches = []
     fallback_matches = []
     
-    # Tracking for 100% coverage
-    amazon_matched_ids = set()
-    flipkart_matched_ids = set()
-    
-    def _get_processor_family(proc_str):
-        if not proc_str or proc_str == "Unknown":
-            return None
-        text = proc_str.lower()
-        if "i3" in text: return "i3"
-        if "i5" in text: return "i5"
-        if "i7" in text: return "i7"
-        if "i9" in text: return "i9"
-        if "ryzen 3" in text: return "ryzen 3"
-        if "ryzen 5" in text: return "ryzen 5"
-        if "ryzen 7" in text: return "ryzen 7"
-        if "ryzen 9" in text: return "ryzen 9"
-        if "m1" in text: return "m1"
-        if "m2" in text: return "m2"
-        if "m3" in text: return "m3"
-        if "celeron" in text: return "celeron"
-        if "pentium" in text: return "pentium"
-        return None
+    seen_flipkart_ids = set()
 
     for amazon_product in amazon_products:
         brand_key = normalize_value(amazon_product.get("brand"))
-        if not brand_key:
-            continue
+        candidates = flipkart_by_brand.get(brand_key, [])
+        if not candidates:
+            candidates = flipkart_products[:20] # basic fallback if no brand match
 
-        candidate_group = flipkart_by_brand.get(brand_key, [])
-        if not candidate_group:
-            continue
+        for candidate in candidates:
+            candidate_id = str(candidate.get("_id")) or candidate.get("link")
+            if candidate_id in seen_flipkart_ids:
+                continue
 
-        for candidate in candidate_group:
+            match_type = classify_product(amazon_product, candidate, normalized_category)
+
             amazon_price = amazon_product.get("price") or 0
             flipkart_price = candidate.get("price") or 0
-            differences = build_differences(amazon_product, candidate) if not is_mobile_category and not is_tv_category else {}
+            price_difference = abs(amazon_price - flipkart_price)
             cheaper_site = "amazon" if amazon_price < flipkart_price else "flipkart" if flipkart_price < amazon_price else "same"
+            differences = build_differences(amazon_product, candidate) if not is_mobile_category and not is_tv_category else {}
 
-            # Tier 1: EXACT MATCH (Score >= 95)
-            score, reasons = score_products(amazon_product, candidate)
+            if match_type == "exact":
+                score, reasons = score_products(amazon_product, candidate)
+                exact_matches.append({
+                    "score": score,
+                    "match_reasons": reasons,
+                    "amazon": amazon_product,
+                    "flipkart": candidate,
+                    "differences": differences,
+                    "price_difference": price_difference,
+                    "cheaper_site": cheaper_site,
+                    "match_type": "exact",
+                    "confidence_label": "Exact Match",
+                })
+                seen_flipkart_ids.add(candidate_id)
 
-            # NEW: Strict spec validation layer (Post-Processing)
-            # 1. Stricter CPU identity check (Look for generations and SKUs)
-            left_proc = normalize_value(amazon_product.get("processor"))
-            right_proc = normalize_value(candidate.get("processor"))
-            
-            p1_family = processor_family(left_proc)
-            p2_family = processor_family(right_proc)
-            
-            # Extract generation markers (e.g., "12th gen", "13th gen")
-            gen1 = re.search(r'(\d{1,2})(?:th|st|nd|rd)\s*gen', left_proc)
-            gen2 = re.search(r'(\d{1,2})(?:th|st|nd|rd)\s*gen', right_proc)
-            
-            # Extract SKU markers (look for strings like "1334u", "1215u")
-            sku1 = re.search(r'\b\d{4,5}[a-z]\b', left_proc)
-            sku2 = re.search(r'\b\d{4,5}[a-z]\b', right_proc)
-            
-            same_cpu = (p1_family == p2_family)
-            
-            # Strict generation enforcement
-            if bool(gen1) != bool(gen2):
-                same_cpu = False
-            elif gen1 and gen2 and gen1.group(1) != gen2.group(1):
-                same_cpu = False
-            
-            # Strict SKU enforcement
-            if bool(sku1) != bool(sku2):
-                same_cpu = False
-            elif sku1 and sku2 and sku1.group(0) != sku2.group(0):
-                same_cpu = False
-
-            same_ram = normalize_value(amazon_product.get("ram")) == normalize_value(candidate.get("ram"))
-            same_storage = normalize_value(amazon_product.get("storage")) == normalize_value(candidate.get("storage"))
-            same_model = normalized_model_code(amazon_product.get("model_code")) == normalized_model_code(candidate.get("model_code"))
-            
-            # RULE 4: Safety override - if model code same but specs differ, force to variant
-            if same_model and not (same_cpu and same_ram and same_storage):
+            elif match_type == "variant":
+                score, reasons = score_variant_match(amazon_product, candidate)
                 variant_matches.append({
                     "score": score,
                     "match_reasons": reasons,
                     "amazon": amazon_product,
                     "flipkart": candidate,
                     "differences": differences,
-                    "price_difference": abs(amazon_price - flipkart_price),
+                    "price_difference": price_difference,
                     "cheaper_site": cheaper_site,
                     "match_type": "variant",
                     "confidence_label": "Variant Match",
                 })
-                amazon_matched_ids.add(str(amazon_product.get("_id")))
-                flipkart_matched_ids.add(str(candidate.get("_id")))
-                break
+                seen_flipkart_ids.add(candidate_id)
 
-            # Tier 1: EXACT MATCH (Score >= 95)
-            # score, reasons = score_products(amazon_product, candidate) # Already called above? Wait. 
-            # I need to keep the existing score_products call.
-            
-            if score >= 95:
-                # RULE 1: Downgrade if specs mismatch
-                if not (same_cpu and same_ram and same_storage):
-                    variant_matches.append({
-                        "score": score,
-                        "match_reasons": reasons,
-                        "amazon": amazon_product,
-                        "flipkart": candidate,
-                        "differences": differences,
-                        "price_difference": abs(amazon_price - flipkart_price),
-                        "cheaper_site": cheaper_site,
-                        "match_type": "variant",
-                        "confidence_label": "Variant Match",
-                    })
-                else:
-                    # RULE 3: Granular labels
-                    # High Confidence ONLY if model code matched exactly
-                    label = "High Confidence Exact" if same_model else "Probable Exact"
-                        
-                    exact_matches.append({
-                        "score": score,
-                        "match_reasons": reasons,
-                        "amazon": amazon_product,
-                        "flipkart": candidate,
-                        "differences": differences,
-                        "price_difference": abs(amazon_price - flipkart_price),
-                        "cheaper_site": cheaper_site,
-                        "match_type": "exact",
-                        "confidence_label": label,
-                    })
-                
-                amazon_matched_ids.add(str(amazon_product.get("_id")))
-                flipkart_matched_ids.add(str(candidate.get("_id")))
-                break # Matched exactly (or downgraded), stop searching for THIS amazon product
-
-            # Tier 2: VARIANT MATCH (Score >= 80)
-            score, reasons = score_variant_match(amazon_product, candidate)
-            if score >= 80:
-                variant_matches.append({
-                    "score": score,
-                    "match_reasons": reasons,
-                    "amazon": amazon_product,
-                    "flipkart": candidate,
-                    "differences": differences,
-                    "price_difference": abs(amazon_price - flipkart_price),
-                    "cheaper_site": cheaper_site,
-                    "match_type": "variant",
-                    "confidence_label": "Variant Match",
-                })
-                amazon_matched_ids.add(str(amazon_product.get("_id")))
-                flipkart_matched_ids.add(str(candidate.get("_id")))
-                break # Matched as variant, stop searching
-
-            # Tier 3: SIMILAR SPECS (Score >= 72)
-            score, reasons = score_spec_match(amazon_product, candidate)
-            if score >= 72:
+            elif match_type == "similar":
+                score, reasons = score_spec_match(amazon_product, candidate)
                 spec_comparable_matches.append({
                     "score": score,
                     "match_reasons": reasons,
                     "amazon": amazon_product,
                     "flipkart": candidate,
                     "differences": differences,
-                    "price_difference": abs(amazon_price - flipkart_price),
+                    "price_difference": price_difference,
                     "cheaper_site": cheaper_site,
                     "match_type": "similar_specs",
                     "confidence_label": "Similar Specs",
                 })
-                amazon_matched_ids.add(str(amazon_product.get("_id")))
-                flipkart_matched_ids.add(str(candidate.get("_id")))
-                break # Matched as similar, stop searching
+                seen_flipkart_ids.add(candidate_id)
+
+            else:
+                score = get_fallback_score(amazon_product, candidate, is_mobile_category, is_tv_category)
+                if score > 0: # Only add somewhat relevant recommended fallbacks
+                    possible_matches.append({
+                        "score": score,
+                        "match_reasons": ["fallback"],
+                        "amazon": amazon_product,
+                        "flipkart": candidate,
+                        "differences": differences,
+                        "price_difference": price_difference,
+                        "cheaper_site": cheaper_site,
+                        "match_type": "fallback",
+                        "confidence_label": "Recommended Alternatives",
+                    })
+
+                    # DO NOT add to seen_flipkart_ids for fallback, so they can be reused if needed
+
 
     exact_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     variant_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     possible_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     spec_comparable_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
+    fallback_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
     
     all_comparable_matches = [*exact_matches, *variant_matches, *spec_comparable_matches]
     all_comparable_matches.sort(key=lambda item: (-item["score"], item["price_difference"]))
@@ -1479,95 +1350,7 @@ def comparison_payload(query=None, limit=20, category="laptops"):
         ),
     )
 
-    # === FALLBACK LOGIC AMZ -> FK ===
-    amazon_orphans = [p for p in amazon_products if str(p.get("_id")) not in amazon_matched_ids]
-    
-    # Pre-fetch some global Flipkart items for the "Rare Case" fallback
-    global_flipkart = []
-    if amazon_orphans:
-        global_flipkart = list(collection.find(
-            {"website": "flipkart", "category": "laptops"},
-            projection
-        ).limit(10))
 
-    for amazon_product in amazon_orphans:
-        brand_key = normalize_value(amazon_product.get("brand"))
-        candidates = flipkart_by_brand.get(brand_key, [])
-        if not candidates:
-            # Fallback to current search results
-            candidates = flipkart_products[:10]
-        if not candidates:
-            # Fallback to global database
-            candidates = global_flipkart
-
-        ranked = []
-        for c in candidates:
-            score = get_fallback_score(amazon_product, c, is_mobile_category, is_tv_category)
-            price_diff = abs((amazon_product.get("price") or 0) - (c.get("price") or 0))
-            ranked.append((score, price_diff, c))
-            
-        ranked.sort(key=lambda x: (-x[0], x[1]))
-        
-        for score, p_diff, matched in ranked[:3]:
-            fallback_matches.append({
-                "score": score,
-                "match_reasons": ["fallback"],
-                "amazon": amazon_product,
-                "flipkart": matched,
-                "differences": (
-                    build_differences(amazon_product, matched) 
-                    if not is_mobile_category and not is_tv_category 
-                    else {}
-                ),
-                "price_difference": p_diff,
-                "cheaper_site": "amazon" if (amazon_product.get("price") or 0) < (matched.get("price") or 0) else "flipkart",
-                "match_type": "fallback",
-                "confidence_label": "Recommended Alternatives",
-            })
-
-    # === FALLBACK LOGIC FK -> AMZ ===
-    flipkart_orphans = [p for p in flipkart_products if str(p.get("_id")) not in flipkart_matched_ids]
-    
-    global_amazon = []
-    if flipkart_orphans:
-        global_amazon = list(collection.find(
-            {"website": "amazon", "category": "laptops"},
-            projection
-        ).limit(10))
-
-    amazon_by_brand = build_candidate_groups(amazon_products)
-    for flipkart_product in flipkart_orphans:
-        brand_key = normalize_value(flipkart_product.get("brand"))
-        candidates = amazon_by_brand.get(brand_key, [])
-        if not candidates:
-            candidates = amazon_products[:10]
-        if not candidates:
-            candidates = global_amazon
-
-        ranked = []
-        for c in candidates:
-            score = get_fallback_score(flipkart_product, c, is_mobile_category, is_tv_category)
-            price_diff = abs((flipkart_product.get("price") or 0) - (c.get("price") or 0))
-            ranked.append((score, price_diff, c))
-            
-        ranked.sort(key=lambda x: (-x[0], x[1]))
-        
-        for score, p_diff, matched in ranked[:3]:
-            fallback_matches.append({
-                "score": score,
-                "match_reasons": ["fallback"],
-                "amazon": matched,
-                "flipkart": flipkart_product,
-                "differences": (
-                    build_differences(matched, flipkart_product) 
-                    if not is_mobile_category and not is_tv_category 
-                    else {}
-                ),
-                "price_difference": p_diff,
-                "cheaper_site": "amazon" if (matched.get("price") or 0) < (flipkart_product.get("price") or 0) else "flipkart",
-                "match_type": "fallback",
-                "confidence_label": "Recommended Alternatives",
-            })
     return {
         "query": query or "",
         "category": normalized_category,
@@ -1584,7 +1367,7 @@ def comparison_payload(query=None, limit=20, category="laptops"):
         "variant_matches": variant_matches[:limit],
         "possible_matches": possible_matches[:limit],
         "spec_comparable_matches": spec_comparable_matches[:limit],
-        "fallback_matches": fallback_matches[:limit],
         "all_comparable_matches": all_comparable_matches[:limit],
+
         "best_value_matches": best_value_matches[:limit],
     }

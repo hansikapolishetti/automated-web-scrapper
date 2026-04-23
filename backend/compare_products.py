@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
 
     payload = comparison_payload(query=args.query.strip(), limit=args.limit, category=args.category.strip().lower())
-    print(json.dumps(payload, ensure_ascii=False))
+    print(json.dumps(payload, ensure_ascii=False, default=str))
 
 
 if __name__ == "__main__":

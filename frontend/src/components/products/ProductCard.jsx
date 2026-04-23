@@ -10,9 +10,11 @@ export default function ProductCard({ title, price, rating, image, store, tag, o
   };
 
   const tagColors = {
-    'Lowest Ever': 'bg-green-100 text-green-700 border-green-200',
-    'Great Deal': 'bg-teal-100 text-teal-700 border-teal-200',
-    'Above Average': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    'Great Deal':  'bg-emerald-100 text-emerald-700 border-emerald-200',
+    'Top Rated':   'bg-amber-100  text-amber-700  border-amber-200',
+    'Popular':     'bg-pink-100   text-pink-700   border-pink-200',
+    'Premium':     'bg-violet-100 text-violet-700 border-violet-200',
+    'Budget Pick': 'bg-sky-100    text-sky-700    border-sky-200',
   };
 
   const tagClass = tagColors[tag] || 'bg-slate-100 text-slate-600 border-slate-200';
