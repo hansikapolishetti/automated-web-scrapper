@@ -69,6 +69,7 @@ export default function ProductPage() {
   const { productId: slug } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -88,6 +89,26 @@ export default function ProductPage() {
 
   const { product, exact_matches, variant_matches, spec_comparable_matches, fallback_matches } = data || {};
 
+  const allResults = useMemo(() => {
+    if (!data) return [];
+    return [
+      ...(exact_matches || []).map(m => ({ ...m, type: 'exact' })),
+      ...(variant_matches || []).map(m => ({ ...m, type: 'variant' })),
+      ...(spec_comparable_matches || []).map(m => ({ ...m, type: 'similar' })),
+      ...(fallback_matches || []).map(m => ({ ...m, type: 'recommended' }))
+    ];
+  }, [data]);
+
+  const filteredResults = useMemo(() => {
+    if (filter === 'all') return allResults;
+    return allResults.filter(item => item.type === filter);
+  }, [allResults, filter]);
+
+  const countByType = (type) => {
+    if (type === 'all') return allResults.length;
+    return allResults.filter(r => r.type === type).length;
+  };
+
 // Tabs removed. Layout uses vertically stacked ExpandableSections.
 
   if (loading) return (
@@ -104,6 +125,32 @@ export default function ProductPage() {
       <Navbar forceDarkText />
 
       <main className="relative z-10 flex-grow pt-24 pb-24 px-8">
+        {product && (
+          <div className="flex justify-center mt-4 mb-10">
+            <div className="flex gap-2 bg-slate-100/80 p-1.5 rounded-full shadow-sm border border-slate-200">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'exact', label: 'Exact' },
+                { id: 'variant', label: 'Variant' },
+                { id: 'similar', label: 'Similar Specs' },
+                { id: 'recommended', label: 'Recommended' }
+              ].map((btn) => (
+                <button
+                  key={btn.id}
+                  onClick={() => setFilter(btn.id)}
+                  className={`px-6 py-2 rounded-full text-sm font-bold transition-all duration-200 ${
+                    filter === btn.id
+                      ? "bg-slate-900 text-white shadow-md"
+                      : "text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {btn.label} ({countByType(btn.id)})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {product ? (
           <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
             
@@ -114,52 +161,18 @@ export default function ProductPage() {
 
             <div className="lg:col-span-6 space-y-8 pb-20 max-h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
               <div className="flex flex-col gap-6">
-                <ExpandableSection 
-                  title="Exact Matches" 
-                  count={exact_matches?.length || 0}
-                >
-                  {product && exact_matches?.map((match, idx) => (
-                    <RightComparisonCard key={`exact-${idx}`} match={match} anchorProduct={product} />
-                  ))}
-                </ExpandableSection>
-
-                <ExpandableSection 
-                  title="Variants" 
-                  count={variant_matches?.length || 0}
-                  description="Same underlying model but varying RAM, Storage, or CPU configuration."
-                >
-                  {product && variant_matches?.map((match, idx) => (
-                    <RightComparisonCard key={`var-${idx}`} match={match} anchorProduct={product} />
-                  ))}
-                </ExpandableSection>
-
-                <ExpandableSection 
-                  title="Similar Specs" 
-                  count={spec_comparable_matches?.length || 0}
-                  description="Different series or models offering equivalent performance."
-                >
-                  {product && spec_comparable_matches?.map((match, idx) => (
-                    <RightComparisonCard key={`sim-${idx}`} match={match} anchorProduct={product} />
-                  ))}
-                </ExpandableSection>
-
-                {fallback_matches?.length > 0 && (
-                  <ExpandableSection 
-                    title="Recommended Alternatives" 
-                    count={fallback_matches?.length || 0}
-                    description="Recommended alternatives based on your selection"
-                  >
-                    {product && fallback_matches?.map((match, idx) => (
-                      <RightComparisonCard key={`fall-${idx}`} match={match} anchorProduct={product} />
-                    ))}
-                  </ExpandableSection>
-                )}
-                
-                {/* Fallback state when absolutely nothing is found */}
-                {(!exact_matches?.length && !variant_matches?.length && !spec_comparable_matches?.length && !fallback_matches?.length) && (
+                {filteredResults.length > 0 ? (
+                  filteredResults.map((match, idx) => (
+                    <RightComparisonCard 
+                      key={`${match.type}-${idx}`} 
+                      match={match} 
+                      anchorProduct={product} 
+                    />
+                  ))
+                ) : (
                   <div className="text-center py-20 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <p className="text-slate-400 font-bold mb-2">No comparisons available</p>
-                    <p className="text-slate-500 text-sm">We couldn't map any direct competitors for this SKU.</p>
+                    <p className="text-slate-400 font-bold mb-2">No items found for this filter</p>
+                    <p className="text-slate-500 text-sm">Try switching to another category or "All".</p>
                   </div>
                 )}
               </div>
