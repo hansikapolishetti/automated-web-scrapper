@@ -40,8 +40,11 @@ const analyzeSpecDiff = (valA, valB, key) => {
     
     if (numA && numB) {
       if (key.toLowerCase() === 'price') {
+        if (numB === numA) return { status: 'same', text: valB };
         return numB < numA ? { status: 'better', text: valB, diff: numA - numB } : { status: 'worse', text: valB, diff: numB - numA };
       } else {
+        // For processor/RAM: same tier = 'same_tier', not better/worse
+        if (numB === numA) return { status: 'same_tier', text: valB };
         return numB > numA ? { status: 'better', text: valB } : { status: 'worse', text: valB };
       }
     }
@@ -70,6 +73,11 @@ const ComparisonRow = ({ label, value, status, diffLabel, isRight = false }) => 
             {status === 'worse' && (
               <span className="text-red-600 text-[9px] bg-red-100 px-1.5 py-0.5 rounded font-black uppercase whitespace-nowrap">
                 {diffLabel || 'Worse'}
+              </span>
+            )}
+            {status === 'same_tier' && diffLabel && (
+              <span className="text-blue-600 text-[9px] bg-blue-100 px-1.5 py-0.5 rounded font-black uppercase whitespace-nowrap">
+                {diffLabel}
               </span>
             )}
             {status === 'same' && diffLabel === 'Same price' && (
@@ -123,9 +131,11 @@ export default function RightComparisonCard({ match, anchorProduct }) {
 
   if (procComp.status === 'better') { headerParts.push("Better processor"); headerColor = "text-green-600"; }
   else if (procComp.status === 'worse') { headerParts.push("Older processor"); headerColor = "text-red-600"; }
+  else if (procComp.status === 'same_tier') { headerParts.push("Same tier processor"); headerColor = "text-blue-600"; }
 
   if (ramComp.status === 'better') { headerParts.push("More RAM"); headerColor = "text-green-600"; }
   else if (ramComp.status === 'worse') { headerParts.push("Lower RAM"); headerColor = "text-red-600"; }
+  else if (ramComp.status === 'same_tier') { headerParts.push("Same RAM"); }
 
   if (priceComp.status === 'better' && priceComp.diff) { 
     headerParts.push(`₹${(Number(priceComp.diff) || 0).toLocaleString('en-IN')} cheaper`); 
@@ -184,14 +194,22 @@ export default function RightComparisonCard({ match, anchorProduct }) {
               label="Processor" 
               value={procB} 
               status={procComp.status} 
-              diffLabel={procComp.status === 'better' ? 'Better' : 'Older'}
+              diffLabel={
+                procComp.status === 'better' ? 'Better' :
+                procComp.status === 'worse'  ? 'Older'  :
+                procComp.status === 'same_tier' ? 'Same Tier' : ''
+              }
             />
             <ComparisonRow 
               isRight 
               label="RAM" 
               value={ramB} 
               status={ramComp.status} 
-              diffLabel={ramComp.status === 'better' ? 'More RAM' : 'Less RAM'}
+              diffLabel={
+                ramComp.status === 'better' ? 'More RAM' :
+                ramComp.status === 'worse'  ? 'Less RAM' :
+                ramComp.status === 'same_tier' ? 'Same' : ''
+              }
             />
             <ComparisonRow 
               isRight 
