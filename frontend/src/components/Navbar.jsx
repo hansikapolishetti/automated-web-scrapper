@@ -33,7 +33,6 @@ export default function Navbar({ forceDarkText = false }) {
           <div className="hidden md:flex items-center space-x-10">
             <Link to="/" className={`font-bold transition-colors drop-shadow-sm ${linkHoverClass}`}>Home</Link>
             <Link to="/categories" className={`font-bold transition-colors drop-shadow-sm ${linkHoverClass}`}>Categories</Link>
-            <a href="#" className={`font-bold transition-colors drop-shadow-sm ${linkHoverClass}`}>Compare</a>
           </div>
           
           <div className="flex items-center gap-6">
